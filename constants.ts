@@ -28,8 +28,8 @@ export const HEX_DIRECTIONS = [
 
 // Discovery Probabilities (0 to 1)
 export const PROBABILITY = {
-  ANIMALS: 0.4,       // 40% chance to find an animal
-  MINERALS: 0.6,      // 60% chance to find minerals
+  ANIMALS: 0.1,       // 40% chance to find an animal
+  MINERALS: 0.15,      // 60% chance to find minerals
   RARE_STONES: 0.05,  // 5% chance to find a rare stone
 };
 
