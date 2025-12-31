@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { BiomeType, HexCoordinate, MapSettings, SavedLocation } from '../types';
 import { hexToPixel, getHexRing, pixelToHex, hexDistance } from '../utils/hexMath';
 import { getBiome } from '../utils/rng';
+import { generateBiomeTextures } from '../utils/biomeTextures';
 import { BIOME_COLORS } from '../constants';
 
 interface HexCanvasProps {
@@ -22,19 +23,37 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
   onLocationSelect
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [textures, setTextures] = useState<Record<BiomeType, CanvasPattern | string> | null>(null);
 
+  // Initialize Textures only once when context is available
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const generated = generateBiomeTextures(ctx);
+    setTextures(generated);
+  }, []); // Run once on mount
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !textures) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     // Handle high DPI displays
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.scale(dpr, dpr);
+    // Only set width/height if they differ to avoid flicker
+    if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+    } else {
+        // Just reset transform if dimensions matched
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
 
     // Clear Screen
     ctx.fillStyle = '#0f172a'; // Match body background
@@ -43,7 +62,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     // Center the camera on the player
     const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
     
-    // Translation: Move canvas origin to center of screen, then subtrack player position
+    // Translation: Move canvas origin to center of screen, then subtract player position
     const offsetX = width / 2 - centerPix.x;
     const offsetY = height / 2 - centerPix.y;
 
@@ -55,7 +74,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     // Draw Hexes
     hexes.forEach(hex => {
-      drawHex(ctx, hex, settings.hexSize, settings.seed);
+      drawHex(ctx, hex, settings.hexSize, settings.seed, textures);
     });
 
     // Draw Saved Location Markers
@@ -71,7 +90,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     ctx.restore();
 
-  }, [playerPos, settings, width, height, savedLocations]);
+  }, [playerPos, settings, width, height, savedLocations, textures]);
 
   // Handle Canvas Clicks
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -96,7 +115,6 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     const clickedHex = pixelToHex(worldX, worldY, settings.hexSize);
 
     // Check if we clicked on a saved location
-    // Find closest within a small threshold to allow easy clicking
     const found = savedLocations.find(loc => {
         return loc.x === clickedHex.q && loc.y === clickedHex.r;
     });
@@ -104,7 +122,13 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     onLocationSelect(found || null);
   };
 
-  const drawHex = (ctx: CanvasRenderingContext2D, hex: HexCoordinate, size: number, seed: string) => {
+  const drawHex = (
+    ctx: CanvasRenderingContext2D, 
+    hex: HexCoordinate, 
+    size: number, 
+    seed: string, 
+    textureMap: Record<BiomeType, CanvasPattern | string>
+) => {
     const { x, y } = hexToPixel(hex.q, hex.r, size);
     
     ctx.beginPath();
@@ -119,15 +143,37 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.closePath();
 
     const biome = getBiome(hex.q, hex.r, seed);
-    ctx.fillStyle = BIOME_COLORS[biome];
+    
+    // Apply Texture
+    if (textureMap && textureMap[biome]) {
+        // We translate the pattern to the hex position so it looks "anchored" 
+        // effectively masking it to the hex, but aligning to world space for seamlessness if desired.
+        // However, standard fill works fine for 'repeat' patterns usually.
+        ctx.fillStyle = textureMap[biome];
+    } else {
+        // Fallback
+        ctx.fillStyle = BIOME_COLORS[biome];
+    }
+    
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    // --- 3D Lighting Effect (Overlay) ---
+    // Simulates sunlight from Top-Left
+    const grad = ctx.createLinearGradient(x - size, y - size, x + size, y + size);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.15)'); // Highlight
+    grad.addColorStop(0.5, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0.2)'); // Shadow
+    
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     if (size > 30) {
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.font = '10px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -142,19 +188,27 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     const pinHeight = size * 1.0;
     const pinWidth = size * 0.6;
     
+    // Drop Shadow for marker
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
     ctx.beginPath();
-    // Move to bottom tip
     ctx.moveTo(x, y);
-    // Curve up to top left
     ctx.bezierCurveTo(x - pinWidth, y - pinHeight/2, x - pinWidth, y - pinHeight, x, y - pinHeight);
-    // Curve down to bottom tip from right
     ctx.bezierCurveTo(x + pinWidth, y - pinHeight, x + pinWidth, y - pinHeight/2, x, y);
     ctx.closePath();
 
-    // Map Pin Color (Gold/Orange from SVG)
     ctx.fillStyle = '#DA954B';
     ctx.fill();
     
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = '#000000';
     ctx.stroke();
@@ -162,7 +216,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     // Small dot in center of the head
     ctx.beginPath();
     ctx.arc(x, y - pinHeight * 0.6, size * 0.2, 0, Math.PI * 2);
-    ctx.fillStyle = '#1e293b'; // Dark Slate
+    ctx.fillStyle = '#1e293b'; 
     ctx.fill();
   };
 

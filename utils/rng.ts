@@ -82,33 +82,19 @@ export function getBiome(q: number, r: number, seed: string): BiomeType {
 
 /**
  * Calculates elevation in meters based on noise height.
- * Rules:
- * - Deep Water: -10000m to approx -1m
- * - Water: Always 0m
- * - Land: 1m to 9000m
  */
 export function getElevation(q: number, r: number, seed: string): number {
   const h = getPerlinApproximation(q, r, seed);
 
-  // DEEP_WATER (< 0.25)
-  // Map 0.0 -> -10000m
-  // Map 0.25 -> ~ -100m
   if (h < 0.25) {
-    const normalized = h / 0.25; // 0 to 1
-    // Linear interpolation from -10000 to -100
+    const normalized = h / 0.25;
     return Math.floor(-10000 + (normalized * 9900));
   }
 
-  // WATER (0.25 to 0.40)
-  // Always 0 meters as per request
   if (h < 0.40) {
     return 0;
   }
 
-  // LAND (> 0.40)
-  // Map 0.40 -> 0m
-  // Map 1.0 -> 9000m
-  // Denominator is 0.60 (range of land)
   const landNormalized = (h - 0.40) / 0.60;
   return Math.floor(landNormalized * 9000);
 }
@@ -122,24 +108,30 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
   
   if (!data) return resources;
 
+  // Check Vegetation
+  const vegRoll = getDeterministicRandom(q, r, seed, 'veg_roll');
+  if (vegRoll < PROBABILITY.VEGETATION && data.vegetation.length > 0) {
+    const idx = Math.floor(getDeterministicRandom(q, r, seed, 'veg_idx') * data.vegetation.length);
+    resources.vegetation = data.vegetation[idx];
+  }
+
   // Check Animal
   const animalRoll = getDeterministicRandom(q, r, seed, 'animal_roll');
-  if (animalRoll < PROBABILITY.ANIMALS) {
-    // Determine which animal
+  if (animalRoll < PROBABILITY.ANIMALS && data.animals.length > 0) {
     const idx = Math.floor(getDeterministicRandom(q, r, seed, 'animal_idx') * data.animals.length);
     resources.animal = data.animals[idx];
   }
 
   // Check Mineral
   const mineralRoll = getDeterministicRandom(q, r, seed, 'mineral_roll');
-  if (mineralRoll < PROBABILITY.MINERALS) {
+  if (mineralRoll < PROBABILITY.MINERALS && data.mineral_resources.length > 0) {
     const idx = Math.floor(getDeterministicRandom(q, r, seed, 'mineral_idx') * data.mineral_resources.length);
     resources.mineral = data.mineral_resources[idx];
   }
 
   // Check Rare Stone
   const rareRoll = getDeterministicRandom(q, r, seed, 'rare_roll');
-  if (rareRoll < PROBABILITY.RARE_STONES) {
+  if (rareRoll < PROBABILITY.RARE_STONES && data.rare_stones.length > 0) {
     const idx = Math.floor(getDeterministicRandom(q, r, seed, 'rare_idx') * data.rare_stones.length);
     resources.rareStone = data.rare_stones[idx];
   }
@@ -147,33 +139,15 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
   return resources;
 }
 
-/**
- * Parses the 128-bit seed to determine a starting position.
- * This ensures different seeds start in vastly different places in the infinite grid.
- */
 export function getStartPositionFromSeed(seed: string): HexCoordinate {
   if (seed.length < 16) return { q: 0, r: 0 };
-  
-  // Take chunks of the hex string to form coordinate offsets
-  // We use BigInt to handle large numbers, then modulo to keep them within a JS number safe range
-  // effectively simulating a very large coordinate space.
-  
   const partA = seed.substring(0, 16);
   const partB = seed.substring(16, 32);
-
-  // We want coordinates that can be negative, so we subtract a bias
   const bigA = BigInt("0x" + (partA || "0"));
   const bigB = BigInt("0x" + (partB || "0"));
-
-  // Modulo to safe integer range (approx +/- 9 quadrillion) 
-  // but let's keep it smaller to avoid any rendering floating point jitters if we were strictly canvas
-  // Although canvas handles translation, let's keep it within +/- 1,000,000 for safety.
-  
   const limit = BigInt(1000000);
-  
   const q = Number(bigA % limit) - 500000;
   const r = Number(bigB % limit) - 500000;
-
   return { q, r };
 }
 

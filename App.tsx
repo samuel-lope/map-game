@@ -3,7 +3,7 @@ import HexCanvas from './components/HexCanvas';
 import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
 import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED } from './constants';
-import { MapSettings, HexCoordinate, MapSaveData, SavedLocation } from './types';
+import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language } from './types';
 import { getStartPositionFromSeed, getElevation } from './utils/rng';
 
 const App: React.FC = () => {
@@ -17,6 +17,7 @@ const App: React.FC = () => {
     renderRadius: DEFAULT_RENDER_RADIUS,
     seed: DEFAULT_SEED
   });
+  const [language, setLanguage] = useState<Language>('pt');
 
   const [playerPos, setPlayerPos] = useState<HexCoordinate>({ q: 0, r: 0 });
   const [metersTraveled, setMetersTraveled] = useState(0);
@@ -203,6 +204,8 @@ const App: React.FC = () => {
             onSaveLocation={handleSaveLocation}
             onDeleteLocation={handleDeleteLocation}
             onTeleport={handleTeleport}
+            language={language}
+            setLanguage={setLanguage}
           />
           
           {/* Help Overlay - only shows initially */}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapSettings, HexCoordinate, BiomeType, SavedLocation } from '../types';
+import { MapSettings, HexCoordinate, BiomeType, SavedLocation, Language } from '../types';
 import { getBiome, getElevation, getHexResources } from '../utils/rng';
 
 interface ControlsProps {
@@ -13,6 +13,9 @@ interface ControlsProps {
   onSaveLocation: (name: string) => void;
   onDeleteLocation: (id: string) => void;
   onTeleport: (loc: SavedLocation) => void;
+  // Language
+  language: Language;
+  setLanguage: (l: Language) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -24,7 +27,9 @@ const Controls: React.FC<ControlsProps> = ({
   savedLocations,
   onSaveLocation,
   onDeleteLocation,
-  onTeleport
+  onTeleport,
+  language,
+  setLanguage
 }) => {
   
   const currentBiome = getBiome(playerPos.q, playerPos.r, settings.seed);
@@ -89,6 +94,25 @@ const Controls: React.FC<ControlsProps> = ({
              onChange={(e) => setSettings({...settings, renderRadius: parseInt(e.target.value)})}
              className="accent-blue-500 w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer"
            />
+        </div>
+
+        {/* Language Toggle */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-slate-700">
+          <label className="text-xs font-bold text-slate-500 uppercase">Language / Idioma</label>
+          <div className="flex gap-2 bg-slate-800 p-1 rounded border border-slate-700">
+             <button 
+               onClick={() => setLanguage('pt')}
+               className={`flex-1 text-xs py-1 rounded font-bold transition-all ${language === 'pt' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+             >
+               PT-BR
+             </button>
+             <button 
+               onClick={() => setLanguage('en')}
+               className={`flex-1 text-xs py-1 rounded font-bold transition-all ${language === 'en' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+             >
+               ENGLISH
+             </button>
+          </div>
         </div>
 
         {/* Saved Locations Section */}
@@ -170,13 +194,23 @@ const Controls: React.FC<ControlsProps> = ({
              <span className="text-xs uppercase text-slate-500 block mb-2">Findings</span>
              <div className="space-y-2">
                 
+                {/* Vegetation */}
+                <div className="flex items-center gap-2">
+                  <span className="text-lg" title="Vegetation">🌿</span>
+                  {resources.vegetation ? (
+                    <span className="text-green-300 font-bold text-sm">{resources.vegetation[language]}</span>
+                  ) : (
+                    <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Sem vegetação' : 'No vegetation'}</span>
+                  )}
+                </div>
+
                 {/* Animal */}
                 <div className="flex items-center gap-2">
                   <span className="text-lg" title="Fauna">🐾</span>
                   {resources.animal ? (
-                    <span className="text-orange-300 font-bold text-sm animate-pulse">{resources.animal}</span>
+                    <span className="text-orange-300 font-bold text-sm animate-pulse">{resources.animal[language]}</span>
                   ) : (
-                    <span className="text-slate-600 text-xs italic">No animals nearby</span>
+                    <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Nenhum animal' : 'No animals'}</span>
                   )}
                 </div>
 
@@ -184,9 +218,9 @@ const Controls: React.FC<ControlsProps> = ({
                 <div className="flex items-center gap-2">
                    <span className="text-lg" title="Minerals">⛏️</span>
                    {resources.mineral ? (
-                    <span className="text-stone-300 font-bold text-sm">{resources.mineral}</span>
+                    <span className="text-stone-300 font-bold text-sm">{resources.mineral[language]}</span>
                   ) : (
-                    <span className="text-slate-600 text-xs italic">No deposits</span>
+                    <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Sem depósitos' : 'No deposits'}</span>
                   )}
                 </div>
 
@@ -194,7 +228,7 @@ const Controls: React.FC<ControlsProps> = ({
                 {resources.rareStone && (
                   <div className="flex items-center gap-2 mt-1 bg-purple-900/30 p-1 rounded border border-purple-500/30">
                      <span className="text-lg" title="Rare Stone">💎</span>
-                     <span className="text-purple-300 font-bold text-sm drop-shadow-md">{resources.rareStone}</span>
+                     <span className="text-purple-300 font-bold text-sm drop-shadow-md">{resources.rareStone[language]}</span>
                   </div>
                 )}
 

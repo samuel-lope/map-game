@@ -46,14 +46,30 @@ export interface MapSaveData {
   saved_positions: SavedLocation[];
 }
 
+export interface LocalizedName {
+  pt: string;
+  en: string;
+}
+
+export interface HarvestableMaterial extends LocalizedName {}
+
+export interface VegetationDefinition extends LocalizedName {
+  id?: string;
+  harvestable_materials?: HarvestableMaterial[];
+}
+
 export interface BiomeResourceData {
-  animals: string[];
-  mineral_resources: string[];
-  rare_stones: string[];
+  animals: LocalizedName[];
+  mineral_resources: LocalizedName[];
+  rare_stones: LocalizedName[];
+  vegetation: VegetationDefinition[];
 }
 
 export interface HexResources {
-  animal?: string;
-  mineral?: string;
-  rareStone?: string;
+  animal?: LocalizedName;
+  mineral?: LocalizedName;
+  rareStone?: LocalizedName;
+  vegetation?: VegetationDefinition;
 }
+
+export type Language = 'pt' | 'en';
