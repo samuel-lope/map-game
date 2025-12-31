@@ -5,7 +5,7 @@ import LandingPage from './components/LandingPage';
 import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED } from './constants';
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language } from './types';
 import { generateRandomCoordinate, getElevation } from './utils/rng';
-import { hexDistance } from './utils/hexMath';
+import { hexDistance, rotateMoveVector } from './utils/hexMath';
 
 const App: React.FC = () => {
   // Screen Dimensions
@@ -24,6 +24,9 @@ const App: React.FC = () => {
   const [spawnPos, setSpawnPos] = useState<HexCoordinate>({ q: 0, r: 0 });
   const [metersTraveled, setMetersTraveled] = useState(0);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
+  
+  // View State
+  const [rotation, setRotation] = useState(0); // Degrees
   
   // UI Selection State
   const [selectedMarker, setSelectedMarker] = useState<SavedLocation | null>(null);
@@ -153,16 +156,20 @@ const App: React.FC = () => {
   const movePlayer = useCallback((dq: number, dr: number) => {
     if (!hasStarted) return; // Prevent movement if not started
 
+    // Adjust the input vector based on current rotation
+    // If map is rotated, we must rotate the movement vector to match the visual direction on screen
+    const rotated = rotateMoveVector(dq, dr, rotation);
+
     setPlayerPos(prev => ({
-      q: prev.q + dq,
-      r: prev.r + dr
+      q: prev.q + rotated.q,
+      r: prev.r + rotated.r
     }));
     // Each hex is now 500 meters
     setMetersTraveled(prev => prev + 500);
     
     // Deselect marker if we move
     setSelectedMarker(null);
-  }, [hasStarted]);
+  }, [hasStarted, rotation]);
 
   // Keyboard Controls
   useEffect(() => {
@@ -204,6 +211,7 @@ const App: React.FC = () => {
             height={dimensions.height}
             playerPos={playerPos}
             settings={settings}
+            rotation={rotation}
             savedLocations={savedLocations}
             onLocationSelect={handleMarkerSelect}
           />
@@ -214,6 +222,8 @@ const App: React.FC = () => {
             movePlayer={movePlayer}
             metersTraveled={metersTraveled}
             distanceFromSpawn={distanceFromSpawn}
+            rotation={rotation}
+            setRotation={setRotation}
             savedLocations={savedLocations}
             onSaveLocation={handleSaveLocation}
             onDeleteLocation={handleDeleteLocation}

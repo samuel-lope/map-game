@@ -68,3 +68,29 @@ export function getHexRing(center: HexCoordinate, radius: number): HexCoordinate
   }
   return results;
 }
+
+/**
+ * Rotates a movement vector (dq, dr) based on the map rotation.
+ * If map rotates CW, we must rotate the vector CCW to match visual direction.
+ */
+export function rotateMoveVector(dq: number, dr: number, rotationDeg: number): HexCoordinate {
+  // Normalize rotation to positive 0-360
+  const rot = ((rotationDeg % 360) + 360) % 360;
+  
+  // Calculate 60 degree steps
+  const steps = Math.round(rot / 60);
+  
+  let q = dq;
+  let r = dr;
+
+  for(let i=0; i<steps; i++) {
+    // Rotate vector 60 degrees Counter-Clockwise (CCW)
+    // Formula: (q, r) -> (q + r, -q)
+    const newQ = q + r;
+    const newR = -q;
+    q = newQ;
+    r = newR;
+  }
+
+  return { q, r };
+}

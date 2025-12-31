@@ -10,6 +10,7 @@ interface HexCanvasProps {
   settings: MapSettings;
   width: number;
   height: number;
+  rotation: number; // degrees
   savedLocations: SavedLocation[];
   onLocationSelect: (loc: SavedLocation | null) => void;
 }
@@ -18,7 +19,8 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
   playerPos, 
   settings, 
   width, 
-  height, 
+  height,
+  rotation, 
   savedLocations,
   onLocationSelect
 }) => {
@@ -59,18 +61,22 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.fillStyle = '#0f172a'; // Match body background
     ctx.fillRect(0, 0, width, height);
 
-    // Center the camera on the player
-    const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
-    
-    // Translation: Move canvas origin to center of screen, then subtract player position
-    const offsetX = width / 2 - centerPix.x;
-    const offsetY = height / 2 - centerPix.y;
-
     ctx.save();
-    ctx.translate(offsetX, offsetY);
+
+    // 1. Move origin to center of screen
+    ctx.translate(width / 2, height / 2);
+
+    // 2. Apply Rotation
+    const rad = (rotation * Math.PI) / 180;
+    ctx.rotate(rad);
+
+    // 3. Move world so player is at the new origin (camera center)
+    const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
+    ctx.translate(-centerPix.x, -centerPix.y);
 
     // Get Visible Hexes
-    const hexes = getHexRing(playerPos, settings.renderRadius + 2);
+    // Increase radius slightly to cover corners when rotated
+    const hexes = getHexRing(playerPos, settings.renderRadius + 3);
 
     // Draw Hexes
     hexes.forEach(hex => {
@@ -80,7 +86,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     // Draw Saved Location Markers
     savedLocations.forEach(loc => {
       const dist = hexDistance({q: loc.x, r: loc.y}, playerPos);
-      if (dist <= settings.renderRadius + 2) {
+      if (dist <= settings.renderRadius + 3) {
         drawMarker(ctx, loc, settings.hexSize);
       }
     });
@@ -90,26 +96,27 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     ctx.restore();
 
-  }, [playerPos, settings, width, height, savedLocations, textures]);
+  }, [playerPos, settings, width, height, rotation, savedLocations, textures]);
 
   // Handle Canvas Clicks
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Get mouse position relative to canvas
+    // Get mouse position relative to canvas center
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const mx = e.clientX - rect.left - width / 2;
+    const my = e.clientY - rect.top - height / 2;
 
-    // Calculate the Camera Offset used in rendering
+    // Apply Inverse Rotation to Mouse Coordinates
+    const rad = (-rotation * Math.PI) / 180;
+    const rx = mx * Math.cos(rad) - my * Math.sin(rad);
+    const ry = mx * Math.sin(rad) + my * Math.cos(rad);
+
+    // Now calculate World Pixel
     const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
-    const offsetX = width / 2 - centerPix.x;
-    const offsetY = height / 2 - centerPix.y;
-
-    // Convert screen pixel to "World" pixel
-    const worldX = mouseX - offsetX;
-    const worldY = mouseY - offsetY;
+    const worldX = rx + centerPix.x;
+    const worldY = ry + centerPix.y;
 
     // Convert World pixel to Hex Coordinate
     const clickedHex = pixelToHex(worldX, worldY, settings.hexSize);
@@ -146,19 +153,15 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     
     // Apply Texture
     if (textureMap && textureMap[biome]) {
-        // We translate the pattern to the hex position so it looks "anchored" 
-        // effectively masking it to the hex, but aligning to world space for seamlessness if desired.
-        // However, standard fill works fine for 'repeat' patterns usually.
         ctx.fillStyle = textureMap[biome];
     } else {
-        // Fallback
         ctx.fillStyle = BIOME_COLORS[biome];
     }
     
     ctx.fill();
 
     // --- 3D Lighting Effect (Overlay) ---
-    // Simulates sunlight from Top-Left
+    // Simulates sunlight from Top-Left (Global coordinates, so it rotates with the map)
     const grad = ctx.createLinearGradient(x - size, y - size, x + size, y + size);
     grad.addColorStop(0, 'rgba(255, 255, 255, 0.15)'); // Highlight
     grad.addColorStop(0.5, 'rgba(0,0,0,0)');

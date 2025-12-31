@@ -9,6 +9,8 @@ interface ControlsProps {
   movePlayer: (dq: number, dr: number) => void;
   metersTraveled: number;
   distanceFromSpawn: number;
+  rotation: number;
+  setRotation: (deg: number | ((prev: number) => number)) => void;
   // Persistence props
   savedLocations: SavedLocation[];
   onSaveLocation: (name: string) => void;
@@ -26,6 +28,8 @@ const Controls: React.FC<ControlsProps> = ({
   movePlayer,
   metersTraveled,
   distanceFromSpawn,
+  rotation,
+  setRotation,
   savedLocations,
   onSaveLocation,
   onDeleteLocation,
@@ -67,11 +71,15 @@ const Controls: React.FC<ControlsProps> = ({
     }
   };
 
+  const rotateMap = (delta: number) => {
+    setRotation(prev => (prev + delta) % 360);
+  };
+
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
       
-      {/* Left Panel: Settings & Saves */}
-      <div className="absolute top-4 left-4 pointer-events-auto flex flex-col gap-4 bg-slate-900/90 backdrop-blur-md p-4 rounded-lg border border-slate-700 shadow-xl w-72 max-h-[90vh] overflow-y-auto z-20">
+      {/* Left Panel: Settings & Saves & Compass */}
+      <div className="absolute top-4 left-4 pointer-events-auto flex flex-col gap-4 bg-slate-900/90 backdrop-blur-md p-4 rounded-lg border border-slate-700 shadow-xl w-72 max-h-[85vh] overflow-y-auto z-20 scrollbar-thin scrollbar-thumb-slate-600">
         <h3 className="font-bold border-b border-slate-700 pb-2 text-slate-400 text-sm uppercase tracking-wider">Map Configuration</h3>
 
         {/* Seed Display (Read Only while playing) */}
@@ -129,7 +137,7 @@ const Controls: React.FC<ControlsProps> = ({
              </button>
           </div>
 
-          <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+          <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
             {savedLocations.length === 0 ? (
               <span className="text-xs text-slate-600 italic">No saved locations.</span>
             ) : (
@@ -160,6 +168,56 @@ const Controls: React.FC<ControlsProps> = ({
             )}
           </div>
         </div>
+
+        {/* Bottom Center: Simplified Compass */}
+        <div className="mt-4 pt-4 border-t border-slate-700 flex flex-col items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Orientation</span>
+            <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => rotateMap(-60)}
+                  className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors border border-slate-600 active:scale-95"
+                  title="Rotate Left (-60°)"
+                >
+                  ↺
+                </button>
+
+                <div 
+                   className="w-12 h-12 bg-slate-800 rounded-full border-2 border-slate-600 relative flex items-center justify-center cursor-pointer transition-transform hover:border-slate-400"
+                   onClick={() => setRotation(0)}
+                   title="Reset North"
+                   style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                >
+                   {/* North */}
+                   <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-red-500">N</div>
+                   <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-red-500"></div>
+
+                   {/* South */}
+                   <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-slate-500"></div>
+
+                   {/* East/West Ticks */}
+                   <div className="absolute right-0.5 top-1/2 -translate-y-1/2 w-1.5 h-0.5 bg-slate-500"></div>
+                   <div className="absolute left-0.5 top-1/2 -translate-y-1/2 w-1.5 h-0.5 bg-slate-500"></div>
+
+                   {/* Center Dot */}
+                   <div className="w-1.5 h-1.5 bg-slate-400 rounded-full z-10"></div>
+                   
+                   {/* Needle */}
+                   <div className="absolute top-1/2 left-1/2 w-0.5 h-8 -translate-x-1/2 -translate-y-1/2">
+                      <div className="absolute top-0 w-full h-1/2 bg-red-500/80"></div>
+                      <div className="absolute bottom-0 w-full h-1/2 bg-slate-400/50"></div>
+                   </div>
+                </div>
+
+                <button 
+                  onClick={() => rotateMap(60)}
+                  className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors border border-slate-600 active:scale-95"
+                  title="Rotate Right (+60°)"
+                >
+                  ↻
+                </button>
+            </div>
+        </div>
+
       </div>
 
       {/* Top Right: Status */}
