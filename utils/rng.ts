@@ -139,6 +139,16 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
   return resources;
 }
 
+/**
+ * Generates a random coordinate within a large range.
+ */
+export function generateRandomCoordinate(): HexCoordinate {
+  const range = 1000000; // safe range for map exploration
+  const q = Math.floor(Math.random() * (range * 2)) - range;
+  const r = Math.floor(Math.random() * (range * 2)) - range;
+  return { q, r };
+}
+
 export function getStartPositionFromSeed(seed: string): HexCoordinate {
   if (seed.length < 16) return { q: 0, r: 0 };
   const partA = seed.substring(0, 16);

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import HexCanvas from './components/HexCanvas';
 import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
 import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED } from './constants';
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language } from './types';
-import { getStartPositionFromSeed, getElevation } from './utils/rng';
+import { generateRandomCoordinate, getElevation } from './utils/rng';
+import { hexDistance } from './utils/hexMath';
 
 const App: React.FC = () => {
   // Screen Dimensions
@@ -20,11 +21,17 @@ const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>('pt');
 
   const [playerPos, setPlayerPos] = useState<HexCoordinate>({ q: 0, r: 0 });
+  const [spawnPos, setSpawnPos] = useState<HexCoordinate>({ q: 0, r: 0 });
   const [metersTraveled, setMetersTraveled] = useState(0);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   
   // UI Selection State
   const [selectedMarker, setSelectedMarker] = useState<SavedLocation | null>(null);
+
+  // Calculate Distance from Spawn
+  const distanceFromSpawn = useMemo(() => {
+    return hexDistance(spawnPos, playerPos) * 500;
+  }, [spawnPos, playerPos]);
 
   // --- PERSISTENCE LOGIC ---
 
@@ -50,7 +57,7 @@ const App: React.FC = () => {
   }, []);
 
   // Function to save data to LocalStorage
-  const saveToStorage = useCallback((seed: string, pos: HexCoordinate, locations: SavedLocation[]) => {
+  const saveToStorage = useCallback((seed: string, pos: HexCoordinate, spawn: HexCoordinate, locations: SavedLocation[]) => {
     const key = getStorageKey(seed);
     const elevation = getElevation(pos.q, pos.r, seed);
     
@@ -59,7 +66,9 @@ const App: React.FC = () => {
       x: pos.q,
       y: pos.r,
       altitude: elevation,
-      saved_positions: locations
+      saved_positions: locations,
+      start_x: spawn.q,
+      start_y: spawn.r
     };
 
     localStorage.setItem(key, JSON.stringify(data));
@@ -72,20 +81,24 @@ const App: React.FC = () => {
     const saveData = loadFromStorage(settings.seed);
     
     if (saveData) {
-      // Load existing
+      // Load existing session for this seed
       setPlayerPos({ q: saveData.x, r: saveData.y });
+      // Restore spawn point if available, otherwise default to current pos (for old saves)
+      setSpawnPos({ 
+        q: saveData.start_x !== undefined ? saveData.start_x : saveData.x, 
+        r: saveData.start_y !== undefined ? saveData.start_y : saveData.y 
+      });
       setSavedLocations(saveData.saved_positions || []);
-      // Estimate distance based on displacement from origin (approx)
-      setMetersTraveled(Math.abs(saveData.x) * 500 + Math.abs(saveData.y) * 500); 
     } else {
-      // New Game
-      const startPos = getStartPositionFromSeed(settings.seed);
-      setPlayerPos(startPos);
+      // New Game - Randomize Start Position
+      const initialPos = generateRandomCoordinate();
+      setPlayerPos(initialPos);
+      setSpawnPos(initialPos);
       setSavedLocations([]);
       setMetersTraveled(0);
       
       // Create initial save file
-      saveToStorage(settings.seed, startPos, []);
+      saveToStorage(settings.seed, initialPos, initialPos, []);
     }
     
     setHasStarted(true);
@@ -94,9 +107,9 @@ const App: React.FC = () => {
   // Auto-save whenever player moves or saves a location
   useEffect(() => {
     if (hasStarted) {
-      saveToStorage(settings.seed, playerPos, savedLocations);
+      saveToStorage(settings.seed, playerPos, spawnPos, savedLocations);
     }
-  }, [playerPos, savedLocations, hasStarted, settings.seed, saveToStorage]);
+  }, [playerPos, spawnPos, savedLocations, hasStarted, settings.seed, saveToStorage]);
 
 
   // --- EVENT HANDLERS ---
@@ -200,6 +213,7 @@ const App: React.FC = () => {
             playerPos={playerPos}
             movePlayer={movePlayer}
             metersTraveled={metersTraveled}
+            distanceFromSpawn={distanceFromSpawn}
             savedLocations={savedLocations}
             onSaveLocation={handleSaveLocation}
             onDeleteLocation={handleDeleteLocation}

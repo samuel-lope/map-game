@@ -8,6 +8,7 @@ interface ControlsProps {
   playerPos: HexCoordinate;
   movePlayer: (dq: number, dr: number) => void;
   metersTraveled: number;
+  distanceFromSpawn: number;
   // Persistence props
   savedLocations: SavedLocation[];
   onSaveLocation: (name: string) => void;
@@ -24,6 +25,7 @@ const Controls: React.FC<ControlsProps> = ({
   playerPos, 
   movePlayer,
   metersTraveled,
+  distanceFromSpawn,
   savedLocations,
   onSaveLocation,
   onDeleteLocation,
@@ -170,12 +172,23 @@ const Controls: React.FC<ControlsProps> = ({
            <div className="flex justify-between text-sm mb-1">
              <span className="text-slate-400">Y (r):</span> <span className="font-mono">{playerPos.r}</span>
            </div>
+           
+           {/* Total Traveled (Odometer) */}
            <div className="flex justify-between text-sm mb-1">
-             <span className="text-slate-400">Dist:</span> 
+             <span className="text-slate-400">{language === 'pt' ? 'Percorrido:' : 'Traveled:'}</span> 
              <span className="font-mono text-blue-400">
                {metersTraveled >= 1000 ? `${(metersTraveled / 1000).toFixed(1)}km` : `${metersTraveled}m`}
              </span>
            </div>
+
+           {/* Distance from Spawn (Radius) */}
+           <div className="flex justify-between text-sm mb-1">
+             <span className="text-slate-400">{language === 'pt' ? 'Raio:' : 'Radius:'}</span> 
+             <span className="font-mono text-purple-400">
+               {distanceFromSpawn >= 1000 ? `${(distanceFromSpawn / 1000).toFixed(1)}km` : `${distanceFromSpawn.toFixed(0)}m`}
+             </span>
+           </div>
+
            <div className="flex justify-between text-sm mb-1">
              <span className="text-slate-400">Altitude:</span> 
              <span className={`font-mono ${elevation < 0 ? 'text-blue-400' : 'text-emerald-400'}`}>

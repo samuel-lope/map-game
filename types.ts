@@ -44,6 +44,8 @@ export interface MapSaveData {
   y: number; // Current r
   altitude: number;
   saved_positions: SavedLocation[];
+  start_x?: number; // Origin q
+  start_y?: number; // Origin r
 }
 
 export interface LocalizedName {

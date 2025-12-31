@@ -3,7 +3,7 @@ import { BiomeType, BiomeResourceData } from './types';
 // 128-bit Hex Seed (32 chars)
 export const DEFAULT_SEED = "A3726246D353E0C7ADEA4FF766C4D6E7";
 export const DEFAULT_HEX_SIZE = 25; // Pixels
-export const DEFAULT_RENDER_RADIUS = 12; // In Hexes
+export const DEFAULT_RENDER_RADIUS = 5; // 5 Hexes * 500m = 2500m
 
 export const BIOME_COLORS: Record<BiomeType, string> = {
   [BiomeType.DEEP_WATER]: '#1e3a8a', // Blue 900
