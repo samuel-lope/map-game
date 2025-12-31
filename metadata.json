@@ -1,0 +1,5 @@
+{
+  "name": "HexInfinite - Procedural Map",
+  "description": "An infinite, procedurally generated hexagonal map explored via a 128-bit seed system.",
+  "requestFramePermissions": []
+}
