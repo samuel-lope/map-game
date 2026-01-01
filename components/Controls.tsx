@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MapSettings, HexCoordinate, BiomeType, SavedLocation, Language } from '../types';
-import { getBiome, getElevation, getHexResources } from '../utils/rng';
+import { MapSettings, HexCoordinate, BiomeType, SavedLocation, Language, HexResources } from '../types';
+import { getBiome, getElevation } from '../utils/rng';
 
 interface ControlsProps {
   settings: MapSettings;
@@ -19,6 +19,8 @@ interface ControlsProps {
   // Language
   language: Language;
   setLanguage: (l: Language) => void;
+  // New Prop
+  currentResources: HexResources;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -35,12 +37,12 @@ const Controls: React.FC<ControlsProps> = ({
   onDeleteLocation,
   onTeleport,
   language,
-  setLanguage
+  setLanguage,
+  currentResources
 }) => {
   
   const currentBiome = getBiome(playerPos.q, playerPos.r, settings.seed);
   const elevation = getElevation(playerPos.q, playerPos.r, settings.seed);
-  const resources = getHexResources(playerPos.q, playerPos.r, settings.seed, currentBiome);
 
   // --- Local UI State for Modals ---
   const [isSaveModalOpen, setSaveModalOpen] = useState(false);
@@ -74,6 +76,12 @@ const Controls: React.FC<ControlsProps> = ({
   const rotateMap = (delta: number) => {
     setRotation(prev => (prev + delta) % 360);
   };
+
+  const isEmpty = 
+    currentResources.vegetation.length === 0 &&
+    currentResources.animals.length === 0 &&
+    currentResources.minerals.length === 0 &&
+    currentResources.rareStones.length === 0;
 
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -222,7 +230,7 @@ const Controls: React.FC<ControlsProps> = ({
 
       {/* Top Right: Status */}
       <div className="absolute top-4 right-4 pointer-events-auto">
-        <div className="bg-slate-900/80 backdrop-blur p-4 rounded-lg border border-slate-700 text-slate-200 w-56 shadow-xl">
+        <div className="bg-slate-900/80 backdrop-blur p-4 rounded-lg border border-slate-700 text-slate-200 w-56 shadow-xl max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600">
            <h3 className="font-bold border-b border-slate-700 mb-2 pb-1 text-slate-400 text-sm uppercase tracking-wider">Status</h3>
            <div className="flex justify-between text-sm mb-1">
              <span className="text-slate-400">X (q):</span> <span className="font-mono">{playerPos.q}</span>
@@ -260,46 +268,64 @@ const Controls: React.FC<ControlsProps> = ({
              </span>
            </div>
 
-           {/* Resources Section */}
+           {/* Resources Section - MULTIPLE ITEMS */}
            <div className="mt-3 pt-2 border-t border-slate-700">
              <span className="text-xs uppercase text-slate-500 block mb-2">Findings</span>
-             <div className="space-y-2">
+             <div className="flex flex-col gap-3">
                 
+                {isEmpty && (
+                  <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Nada encontrado.' : 'Nothing found.'}</span>
+                )}
+
                 {/* Vegetation */}
-                <div className="flex items-center gap-2">
-                  <span className="text-lg" title="Vegetation">🌿</span>
-                  {resources.vegetation ? (
-                    <span className="text-green-300 font-bold text-sm">{resources.vegetation[language]}</span>
-                  ) : (
-                    <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Sem vegetação' : 'No vegetation'}</span>
-                  )}
-                </div>
+                {currentResources.vegetation.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                     <span className="text-xs text-green-500/80 font-bold uppercase tracking-wide">Vegetation</span>
+                     {currentResources.vegetation.map((veg, i) => (
+                       <div key={i} className="flex items-center gap-2 pl-1">
+                         <span className="text-sm">🌿</span>
+                         <span className="text-green-200 text-xs font-semibold">{veg[language]}</span>
+                       </div>
+                     ))}
+                  </div>
+                )}
 
-                {/* Animal */}
-                <div className="flex items-center gap-2">
-                  <span className="text-lg" title="Fauna">🐾</span>
-                  {resources.animal ? (
-                    <span className="text-orange-300 font-bold text-sm animate-pulse">{resources.animal[language]}</span>
-                  ) : (
-                    <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Nenhum animal' : 'No animals'}</span>
-                  )}
-                </div>
+                {/* Animals */}
+                {currentResources.animals.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                     <span className="text-xs text-orange-500/80 font-bold uppercase tracking-wide">Fauna</span>
+                     {currentResources.animals.map((anim, i) => (
+                       <div key={i} className="flex items-center gap-2 pl-1 animate-pulse">
+                         <span className="text-sm">🐾</span>
+                         <span className="text-orange-200 text-xs font-semibold">{anim[language]}</span>
+                       </div>
+                     ))}
+                  </div>
+                )}
 
-                {/* Mineral */}
-                <div className="flex items-center gap-2">
-                   <span className="text-lg" title="Minerals">⛏️</span>
-                   {resources.mineral ? (
-                    <span className="text-stone-300 font-bold text-sm">{resources.mineral[language]}</span>
-                  ) : (
-                    <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Sem depósitos' : 'No deposits'}</span>
-                  )}
-                </div>
+                {/* Minerals */}
+                {currentResources.minerals.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                     <span className="text-xs text-stone-500/80 font-bold uppercase tracking-wide">Minerals</span>
+                     {currentResources.minerals.map((min, i) => (
+                       <div key={i} className="flex items-center gap-2 pl-1">
+                         <span className="text-sm">⛏️</span>
+                         <span className="text-stone-300 text-xs font-semibold">{min[language]}</span>
+                       </div>
+                     ))}
+                  </div>
+                )}
 
-                {/* Rare Stone */}
-                {resources.rareStone && (
-                  <div className="flex items-center gap-2 mt-1 bg-purple-900/30 p-1 rounded border border-purple-500/30">
-                     <span className="text-lg" title="Rare Stone">💎</span>
-                     <span className="text-purple-300 font-bold text-sm drop-shadow-md">{resources.rareStone[language]}</span>
+                {/* Rare Stones */}
+                {currentResources.rareStones.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                     <span className="text-xs text-purple-500/80 font-bold uppercase tracking-wide">Rare Findings</span>
+                     {currentResources.rareStones.map((rare, i) => (
+                        <div key={i} className="flex items-center gap-2 mt-1 bg-purple-900/30 p-1 rounded border border-purple-500/30">
+                          <span className="text-sm">💎</span>
+                          <span className="text-purple-300 font-bold text-xs drop-shadow-md">{rare[language]}</span>
+                        </div>
+                     ))}
                   </div>
                 )}
 
@@ -309,8 +335,8 @@ const Controls: React.FC<ControlsProps> = ({
         </div>
       </div>
 
-      {/* Bottom Right: D-Pad Controls (for mobile/mouse) */}
-      <div className="absolute bottom-8 right-8 pointer-events-auto flex flex-col items-center gap-1">
+      {/* Bottom Left: D-Pad Controls (for mobile/mouse) - MOVED FROM RIGHT */}
+      <div className="absolute bottom-8 left-8 pointer-events-auto flex flex-col items-center gap-1">
         <div className="flex gap-1">
           <button onClick={() => movePlayer(0, -1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-tl-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↖</button>
           <button onClick={() => movePlayer(1, -1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-tr-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↗</button>

@@ -1,3 +1,4 @@
+
 export interface HexCoordinate {
   q: number;
   r: number;
@@ -51,6 +52,7 @@ export interface MapSaveData {
 export interface LocalizedName {
   pt: string;
   en: string;
+  image?: string; // URL for 512x512 image
 }
 
 export interface HarvestableMaterial extends LocalizedName {}
@@ -68,10 +70,10 @@ export interface BiomeResourceData {
 }
 
 export interface HexResources {
-  animal?: LocalizedName;
-  mineral?: LocalizedName;
-  rareStone?: LocalizedName;
-  vegetation?: VegetationDefinition;
+  animals: LocalizedName[];
+  minerals: LocalizedName[];
+  rareStones: LocalizedName[];
+  vegetation: VegetationDefinition[];
 }
 
 export type Language = 'pt' | 'en';

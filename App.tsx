@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import HexCanvas from './components/HexCanvas';
 import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
+import Dock from './components/Dock';
 import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED } from './constants';
-import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language } from './types';
-import { generateRandomCoordinate, getElevation } from './utils/rng';
+import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources } from './types';
+import { generateRandomCoordinate, getElevation, getHexResources, getBiome } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
 
 // Easing function for smooth animation (Ease In Out Cubic)
@@ -30,6 +31,15 @@ const App: React.FC = () => {
   const [metersTraveled, setMetersTraveled] = useState(0);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   
+  // Resource State
+  const [currentResources, setCurrentResources] = useState<HexResources>({
+    animals: [],
+    minerals: [],
+    rareStones: [],
+    vegetation: []
+  });
+  const [recentItems, setRecentItems] = useState<LocalizedName[]>([]);
+
   // View State
   const [rotation, setRotation] = useState(0); // Degrees
   const [isTeleporting, setIsTeleporting] = useState(false); // Animation State
@@ -124,6 +134,41 @@ const App: React.FC = () => {
       saveToStorage(settings.seed, playerPos, spawnPos, savedLocations);
     }
   }, [playerPos, spawnPos, savedLocations, hasStarted, settings.seed, saveToStorage, isTeleporting]);
+
+
+  // --- RESOURCE CALCULATION LOGIC ---
+  useEffect(() => {
+    if (!hasStarted) return;
+    
+    const currentBiome = getBiome(playerPos.q, playerPos.r, settings.seed);
+    const resources = getHexResources(playerPos.q, playerPos.r, settings.seed, currentBiome);
+    setCurrentResources(resources);
+
+    // Update Dock Items
+    // Collect all valid resource items found in this hex
+    const foundItems: LocalizedName[] = [
+      ...resources.rareStones,
+      ...resources.animals,
+      ...resources.vegetation,
+      ...resources.minerals
+    ];
+
+    if (foundItems.length > 0) {
+      setRecentItems(prev => {
+        let newHistory = [...prev];
+        
+        foundItems.forEach(item => {
+           // Move to front if exists, or add new
+           newHistory = newHistory.filter(h => h.en !== item.en);
+           newHistory.unshift(item);
+        });
+
+        // Limit to 6
+        return newHistory.slice(0, 6);
+      });
+    }
+
+  }, [playerPos, settings.seed, hasStarted]);
 
 
   // --- EVENT HANDLERS ---
@@ -339,8 +384,11 @@ const App: React.FC = () => {
             onTeleport={handleTeleport}
             language={language}
             setLanguage={setLanguage}
+            currentResources={currentResources}
           />
           
+          <Dock items={recentItems} language={language} />
+
           {/* Help Overlay - only shows initially */}
           {metersTraveled === 0 && savedLocations.length === 0 && !isTeleporting && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center opacity-70 animate-pulse z-50">

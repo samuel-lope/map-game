@@ -1,4 +1,5 @@
-import { BiomeType, HexCoordinate, HexResources } from '../types';
+
+import { BiomeType, HexCoordinate, HexResources, LocalizedName } from '../types';
 import { BIOME_RESOURCES, PROBABILITY } from '../constants';
 
 /**
@@ -100,40 +101,90 @@ export function getElevation(q: number, r: number, seed: string): number {
 }
 
 /**
+ * Deterministically shuffles an array based on coordinates and seed.
+ * This ensures we pick unique items randomly but consistently.
+ */
+function shuffleDeterministic<T>(array: T[], q: number, r: number, seed: string, salt: string): T[] {
+  const copy = [...array];
+  let m = copy.length, t, i;
+
+  while (m) {
+    // Generate index based on remaining items and context
+    const rand = getDeterministicRandom(q, r, seed, `${salt}_${m}`);
+    i = Math.floor(rand * m--);
+
+    t = copy[m];
+    copy[m] = copy[i];
+    copy[i] = t;
+  }
+
+  return copy;
+}
+
+/**
  * Generates resources for a specific hex based on biome and probability.
+ * Now supports multiple findings per category.
  */
 export function getHexResources(q: number, r: number, seed: string, biome: BiomeType): HexResources {
-  const resources: HexResources = {};
-  const data = BIOME_RESOURCES[biome];
+  const resources: HexResources = {
+    animals: [],
+    minerals: [],
+    rareStones: [],
+    vegetation: []
+  };
   
+  const data = BIOME_RESOURCES[biome];
   if (!data) return resources;
 
-  // Check Vegetation
-  const vegRoll = getDeterministicRandom(q, r, seed, 'veg_roll');
-  if (vegRoll < PROBABILITY.VEGETATION && data.vegetation.length > 0) {
-    const idx = Math.floor(getDeterministicRandom(q, r, seed, 'veg_idx') * data.vegetation.length);
-    resources.vegetation = data.vegetation[idx];
+  // 1. Vegetation (Abundant)
+  // Calculate potential density (0 to 4 items)
+  const vegDensityRoll = getDeterministicRandom(q, r, seed, 'veg_density');
+  let vegCount = 0;
+  if (vegDensityRoll < PROBABILITY.VEGETATION) {
+     // If we hit the probability, how many?
+     // Map 0-1 range to 1-4 items
+     vegCount = Math.floor(getDeterministicRandom(q, r, seed, 'veg_count') * 4) + 1;
+  }
+  if (vegCount > 0 && data.vegetation.length > 0) {
+    const shuffled = shuffleDeterministic(data.vegetation, q, r, seed, 'veg_shuffle');
+    resources.vegetation = shuffled.slice(0, Math.min(vegCount, shuffled.length));
   }
 
-  // Check Animal
-  const animalRoll = getDeterministicRandom(q, r, seed, 'animal_roll');
-  if (animalRoll < PROBABILITY.ANIMALS && data.animals.length > 0) {
-    const idx = Math.floor(getDeterministicRandom(q, r, seed, 'animal_idx') * data.animals.length);
-    resources.animal = data.animals[idx];
+  // 2. Animals
+  // Potential density (0 to 3 items)
+  const animDensityRoll = getDeterministicRandom(q, r, seed, 'anim_density');
+  let animCount = 0;
+  if (animDensityRoll < PROBABILITY.ANIMALS) {
+    animCount = Math.floor(getDeterministicRandom(q, r, seed, 'anim_count') * 3) + 1;
+  }
+  if (animCount > 0 && data.animals.length > 0) {
+    const shuffled = shuffleDeterministic(data.animals, q, r, seed, 'anim_shuffle');
+    resources.animals = shuffled.slice(0, Math.min(animCount, shuffled.length));
   }
 
-  // Check Mineral
-  const mineralRoll = getDeterministicRandom(q, r, seed, 'mineral_roll');
-  if (mineralRoll < PROBABILITY.MINERALS && data.mineral_resources.length > 0) {
-    const idx = Math.floor(getDeterministicRandom(q, r, seed, 'mineral_idx') * data.mineral_resources.length);
-    resources.mineral = data.mineral_resources[idx];
+  // 3. Minerals
+  // Potential density (0 to 2 items)
+  const minDensityRoll = getDeterministicRandom(q, r, seed, 'min_density');
+  let minCount = 0;
+  if (minDensityRoll < PROBABILITY.MINERALS) {
+    minCount = Math.floor(getDeterministicRandom(q, r, seed, 'min_count') * 2) + 1;
+  }
+  if (minCount > 0 && data.mineral_resources.length > 0) {
+    const shuffled = shuffleDeterministic(data.mineral_resources, q, r, seed, 'min_shuffle');
+    resources.minerals = shuffled.slice(0, Math.min(minCount, shuffled.length));
   }
 
-  // Check Rare Stone
-  const rareRoll = getDeterministicRandom(q, r, seed, 'rare_roll');
-  if (rareRoll < PROBABILITY.RARE_STONES && data.rare_stones.length > 0) {
-    const idx = Math.floor(getDeterministicRandom(q, r, seed, 'rare_idx') * data.rare_stones.length);
-    resources.rareStone = data.rare_stones[idx];
+  // 4. Rare Stones
+  // Usually just 0 or 1, but let's allow rare chance of 2
+  const rareRoll = getDeterministicRandom(q, r, seed, 'rare_density');
+  let rareCount = 0;
+  if (rareRoll < PROBABILITY.RARE_STONES) {
+    // Very lucky roll for double rare stone
+    rareCount = (getDeterministicRandom(q, r, seed, 'rare_count') > 0.8) ? 2 : 1;
+  }
+  if (rareCount > 0 && data.rare_stones.length > 0) {
+    const shuffled = shuffleDeterministic(data.rare_stones, q, r, seed, 'rare_shuffle');
+    resources.rareStones = shuffled.slice(0, Math.min(rareCount, shuffled.length));
   }
 
   return resources;
