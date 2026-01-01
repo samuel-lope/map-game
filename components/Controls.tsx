@@ -325,7 +325,7 @@ const Controls: React.FC<ControlsProps> = ({
           <button onClick={() => movePlayer(0, 1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-br-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↘</button>
         </div>
         <div className="mt-2 text-xs text-slate-500 font-mono bg-slate-900/50 px-2 py-1 rounded text-center">
-          Q W E A S D
+           ARROWS + COMBOS
         </div>
       </div>
 

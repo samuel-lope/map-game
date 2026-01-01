@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import HexCanvas from './components/HexCanvas';
 import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
@@ -6,6 +6,11 @@ import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED } from './constan
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language } from './types';
 import { generateRandomCoordinate, getElevation } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
+
+// Easing function for smooth animation (Ease In Out Cubic)
+const easeInOutCubic = (t: number): number => {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+};
 
 const App: React.FC = () => {
   // Screen Dimensions
@@ -27,9 +32,14 @@ const App: React.FC = () => {
   
   // View State
   const [rotation, setRotation] = useState(0); // Degrees
+  const [isTeleporting, setIsTeleporting] = useState(false); // Animation State
   
   // UI Selection State
   const [selectedMarker, setSelectedMarker] = useState<SavedLocation | null>(null);
+
+  // Input State
+  const pressedKeys = useRef<Set<string>>(new Set());
+  const animationFrameRef = useRef<number>(0);
 
   // Calculate Distance from Spawn
   const distanceFromSpawn = useMemo(() => {
@@ -108,11 +118,12 @@ const App: React.FC = () => {
   };
 
   // Auto-save whenever player moves or saves a location
+  // Skip auto-save during teleport animation to avoid thrashing storage
   useEffect(() => {
-    if (hasStarted) {
+    if (hasStarted && !isTeleporting) {
       saveToStorage(settings.seed, playerPos, spawnPos, savedLocations);
     }
-  }, [playerPos, spawnPos, savedLocations, hasStarted, settings.seed, saveToStorage]);
+  }, [playerPos, spawnPos, savedLocations, hasStarted, settings.seed, saveToStorage, isTeleporting]);
 
 
   // --- EVENT HANDLERS ---
@@ -134,13 +145,65 @@ const App: React.FC = () => {
     if (selectedMarker?.id === id) setSelectedMarker(null);
   };
 
+  // Teleport Animation Logic
   const handleTeleport = (loc: SavedLocation) => {
-    setPlayerPos({ q: loc.x, r: loc.y });
-    setSelectedMarker(null); // Close popup on teleport
+    if (isTeleporting) return;
+
+    setSelectedMarker(null); // Close popup
+    
+    const startPos = playerPos;
+    const endPos = { q: loc.x, r: loc.y };
+    
+    // Calculate distance to determine animation duration
+    // Distances can be large, so we clamp the duration between 1s and 3s
+    const dist = hexDistance(startPos, endPos);
+    
+    // If we are already there, do nothing
+    if (dist < 0.1) return;
+
+    setIsTeleporting(true);
+
+    const baseDuration = 1000; // Minimum 1 second
+    const durationPerHex = 10; // +10ms per hex
+    const maxDuration = 3000; // Cap at 3 seconds max
+    
+    const duration = Math.min(maxDuration, baseDuration + (dist * durationPerHex));
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Apply easing
+      const ease = easeInOutCubic(progress);
+
+      // Interpolate Coordinates
+      const currentQ = startPos.q + (endPos.q - startPos.q) * ease;
+      const currentR = startPos.r + (endPos.r - startPos.r) * ease;
+
+      setPlayerPos({ q: currentQ, r: currentR });
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        // Finished
+        setPlayerPos(endPos); // Snap to exact target
+        setIsTeleporting(false);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
   };
 
+  // Clean up animation on unmount
+  useEffect(() => {
+    return () => cancelAnimationFrame(animationFrameRef.current);
+  }, []);
+
   const handleMarkerSelect = (loc: SavedLocation | null) => {
-    setSelectedMarker(loc);
+    if (!isTeleporting) {
+      setSelectedMarker(loc);
+    }
   };
 
   // Handle Resize
@@ -154,10 +217,9 @@ const App: React.FC = () => {
 
   // Movement Logic
   const movePlayer = useCallback((dq: number, dr: number) => {
-    if (!hasStarted) return; // Prevent movement if not started
+    if (!hasStarted || isTeleporting) return; // Prevent movement if not started or teleporting
 
     // Adjust the input vector based on current rotation
-    // If map is rotated, we must rotate the movement vector to match the visual direction on screen
     const rotated = rotateMoveVector(dq, dr, rotation);
 
     setPlayerPos(prev => ({
@@ -169,30 +231,77 @@ const App: React.FC = () => {
     
     // Deselect marker if we move
     setSelectedMarker(null);
-  }, [hasStarted, rotation]);
+  }, [hasStarted, rotation, isTeleporting]);
 
   // Keyboard Controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!hasStarted) return;
+      if (!hasStarted || isTeleporting) return;
       if (document.activeElement?.tagName === 'INPUT') return;
 
-      switch (e.key.toLowerCase()) {
-        case 'q': movePlayer(0, -1); break;
-        case 'e': movePlayer(1, -1); break;
-        case 'a': movePlayer(-1, 0); break;
-        case 'd': movePlayer(1, 0); break;
-        case 'z': movePlayer(-1, 1); break;
-        case 'x': movePlayer(0, 1); break;
-        case 'w': movePlayer(0, -1); break;
-        case 's': movePlayer(0, 1); break;
-        case 'escape': setSelectedMarker(null); break; 
+      const key = e.key;
+      pressedKeys.current.add(key);
+
+      // Prevent default scrolling for arrow keys
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+        e.preventDefault();
       }
+
+      if (key === 'Escape') {
+        setSelectedMarker(null);
+        return;
+      }
+
+      // Check Key Combinations
+      const up = pressedKeys.current.has('ArrowUp');
+      const down = pressedKeys.current.has('ArrowDown');
+      const left = pressedKeys.current.has('ArrowLeft');
+      const right = pressedKeys.current.has('ArrowRight');
+
+      let dq = 0;
+      let dr = 0;
+      let shouldMove = false;
+
+      // Logic: Up/Down only work if Left/Right are also pressed
+      
+      if (key === 'ArrowLeft') {
+         if (up) { dq = 0; dr = -1; shouldMove = true; } // Up + Left = NW
+         else if (down) { dq = -1; dr = 1; shouldMove = true; } // Down + Left = SW
+         else { dq = -1; dr = 0; shouldMove = true; } // Left only = W
+      }
+      else if (key === 'ArrowRight') {
+         if (up) { dq = 1; dr = -1; shouldMove = true; } // Up + Right = NE
+         else if (down) { dq = 0; dr = 1; shouldMove = true; } // Down + Right = SE
+         else { dq = 1; dr = 0; shouldMove = true; } // Right only = E
+      }
+      else if (key === 'ArrowUp') {
+         if (left) { dq = 0; dr = -1; shouldMove = true; } // Up + Left = NW
+         else if (right) { dq = 1; dr = -1; shouldMove = true; } // Up + Right = NE
+         // Up alone does nothing
+      }
+      else if (key === 'ArrowDown') {
+         if (left) { dq = -1; dr = 1; shouldMove = true; } // Down + Left = SW
+         else if (right) { dq = 0; dr = 1; shouldMove = true; } // Down + Right = SE
+         // Down alone does nothing
+      }
+
+      if (shouldMove) {
+        movePlayer(dq, dr);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      pressedKeys.current.delete(e.key);
     };
     
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [movePlayer, hasStarted]);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [movePlayer, hasStarted, isTeleporting]);
 
   // Main Render Flow
   return (
@@ -233,15 +342,28 @@ const App: React.FC = () => {
           />
           
           {/* Help Overlay - only shows initially */}
-          {metersTraveled === 0 && savedLocations.length === 0 && (
+          {metersTraveled === 0 && savedLocations.length === 0 && !isTeleporting && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center opacity-70 animate-pulse z-50">
                <h1 className="text-4xl font-bold text-white mb-2 tracking-widest uppercase drop-shadow-lg">Explorar</h1>
-               <p className="text-slate-200 font-bold bg-slate-900/50 px-4 py-1 rounded-full">Use Q W E A S D</p>
+               <div className="flex flex-col gap-1 items-center bg-slate-900/50 px-6 py-2 rounded-xl border border-white/10">
+                 <p className="text-white font-bold text-lg">Use as Setas</p>
+                 <p className="text-slate-300 text-xs">← Esquerda / Direita →</p>
+                 <p className="text-slate-400 text-[10px] uppercase tracking-wider">Combine com ↑ Cima / Baixo ↓</p>
+               </div>
             </div>
           )}
 
+          {/* Teleporting State Indicator */}
+          {isTeleporting && (
+             <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 pointer-events-none z-50">
+                <div className="bg-blue-600/80 backdrop-blur text-white px-4 py-2 rounded-full font-bold shadow-lg animate-bounce border border-blue-400">
+                   TRAVELING...
+                </div>
+             </div>
+          )}
+
           {/* Marker Details Popup */}
-          {selectedMarker && (
+          {selectedMarker && !isTeleporting && (
              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-slate-800/90 backdrop-blur border border-yellow-500/50 p-4 rounded-xl shadow-2xl z-40 min-w-[280px] animate-in fade-in zoom-in duration-200">
                 <div className="flex justify-between items-start mb-2 border-b border-slate-700 pb-2">
                   <h3 className="font-bold text-yellow-400 text-lg truncate pr-4">{selectedMarker.name}</h3>
