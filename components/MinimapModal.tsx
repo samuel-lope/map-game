@@ -1,7 +1,8 @@
+
 import React, { useRef, useEffect } from 'react';
 import { ExploredBounds, HexCoordinate, Language, MapSettings } from '../types';
-import { getBiome } from '../utils/rng';
-import { BIOME_COLORS } from '../constants';
+import { getTerrain } from '../utils/rng';
+import { TERRAIN_COLORS } from '../constants';
 import { hexToPixel, getHexRing } from '../utils/hexMath';
 
 interface MinimapModalProps {
@@ -51,9 +52,6 @@ const MinimapModal: React.FC<MinimapModalProps> = ({ seed, bounds, playerPos, on
     const HEX_SIZE = 5; 
     
     // Calculate how many hexes fit in the radius of the canvas
-    // Width of a hex is sqrt(3) * size
-    // We want to cover canvasSize / 2 radius.
-    // radiusHex ≈ (canvasSize / 2) / (size * 1.5) approx
     const renderRadius = Math.ceil((canvasSize / 2) / (HEX_SIZE * 1.5)) + 2;
 
     // Center of canvas
@@ -91,8 +89,8 @@ const MinimapModal: React.FC<MinimapModalProps> = ({ seed, bounds, playerPos, on
 
     // Draw Map
     hexes.forEach(hex => {
-       const biome = getBiome(hex.q, hex.r, settings);
-       drawHex(hex.q, hex.r, BIOME_COLORS[biome]);
+       const terrain = getTerrain(hex.q, hex.r, settings);
+       drawHex(hex.q, hex.r, TERRAIN_COLORS[terrain]);
     });
 
     // Draw Player Marker

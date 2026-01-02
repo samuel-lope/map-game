@@ -1,6 +1,6 @@
 
-import { BiomeType, HexCoordinate, HexResources, MapSettings, BiomeWeights } from '../types';
-import { BIOME_RESOURCES, PROBABILITY, DEFAULT_BIOME_WEIGHTS } from '../constants';
+import { TerrainType, HexCoordinate, HexResources, MapSettings, TerrainWeights, BiomeResourceData, GlobalBiomeDef, GlobalBiomeConfig } from '../types';
+import { PROBABILITY, DEFAULT_TERRAIN_WEIGHTS, GLOBAL_BIOMES_DATA } from '../constants';
 
 // --- PSEUDO-RANDOM & NOISE CORE ---
 
@@ -69,8 +69,7 @@ function getNoiseCoordinates(q: number, r: number): { x: number, y: number } {
 // --- CONFIGURATION PARSING ---
 
 // Calculates thresholds based on weights.
-// Returns a set of height and moisture cutoffs.
-function calculateThresholds(weights: BiomeWeights) {
+function calculateThresholds(weights: TerrainWeights) {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   if (total === 0) {
     // Fallback to standard
@@ -94,35 +93,18 @@ function calculateThresholds(weights: BiomeWeights) {
   const pSnow = weights.SNOW / total;
 
   // Height Thresholds
-  // The cumulative probability defines where the cutoff is on a 0-1 noise scale.
-  // Deep Water is the lowest chunk.
   const deepWater = pDeep; 
-  // Water ends where Deep Water + Water ends
   const water = pDeep + pWater;
   
-  // High Altitude thresholds (Mountain + Snow) are at the top.
-  // So Snow starts at 1 - pSnow
   const snowStart = 1.0 - pSnow;
-  // Mountain starts before snow
   const mountainStart = snowStart - pMount;
 
-  // Coast/Sand is trickier because sand also exists as deserts in dry areas.
-  // For height-based coastlines, we add the Sand weight to the Water threshold.
-  // We'll take half of the Sand probability for "Beaches" and half for "Deserts" conceptually.
   const sandThreshold = water + (pSand * 0.4); 
 
-  // Moisture Bias
-  // We want to shift the moisture noise.
-  // Default FBM yields avg 0.5. 
-  // If Forest weight is high, we want result > 0.65 often.
-  // If Grass weight is high, we want result around 0.5.
-  // If Sand/Desert weight is high, we want result < 0.35.
-  
   let moistureBias = 0;
   const landTotal = pSand + pGrass + pForest;
   if (landTotal > 0) {
      const weightedAvg = (pSand * 0.2 + pGrass * 0.5 + pForest * 0.8) / landTotal;
-     // Standard avg is 0.5. If weightedAvg is 0.8 (mostly forest), bias is +0.3.
      moistureBias = (weightedAvg - 0.5) * 1.5; 
   }
 
@@ -148,8 +130,8 @@ interface TerrainData {
 
 // Now accepts MapSettings instead of just seed string
 function getTerrainData(q: number, r: number, settings: MapSettings): TerrainData {
-  const { seed, biomeWeights } = settings;
-  const thresholds = calculateThresholds(biomeWeights || DEFAULT_BIOME_WEIGHTS);
+  const { seed, terrainWeights } = settings;
+  const thresholds = calculateThresholds(terrainWeights || DEFAULT_TERRAIN_WEIGHTS);
 
   const seedHash = hash128(seed);
   const seedVal = (seedHash % 100000) / 1000; 
@@ -195,32 +177,73 @@ function getTerrainData(q: number, r: number, settings: MapSettings): TerrainDat
 }
 
 
-export function getBiome(q: number, r: number, settings: MapSettings): BiomeType {
+export function getTerrain(q: number, r: number, settings: MapSettings): TerrainType {
   const { height, moisture, isRiver, thresholds } = getTerrainData(q, r, settings);
 
-  if (isRiver) return BiomeType.WATER;
+  if (isRiver) return TerrainType.WATER;
 
-  if (height < thresholds.deepWater) return BiomeType.DEEP_WATER;
-  if (height < thresholds.water) return BiomeType.WATER;
-  if (height < thresholds.sand) return BiomeType.SAND;
+  if (height < thresholds.deepWater) return TerrainType.DEEP_WATER;
+  if (height < thresholds.water) return TerrainType.WATER;
+  if (height < thresholds.sand) return TerrainType.SAND;
 
   // High Altitude
   if (height > thresholds.mountainStart) {
-    if (height > thresholds.snowStart) return BiomeType.SNOW;
-    return BiomeType.MOUNTAIN;
+    if (height > thresholds.snowStart) return TerrainType.SNOW;
+    return TerrainType.MOUNTAIN;
   }
 
-  // Mid Altitude (Plains, Forests, Deserts)
-  // Use moisture to differentiate
+  // Mid Altitude
   if (moisture < 0.35) {
-    return BiomeType.SAND; // Desert
+    return TerrainType.SAND; // Desert
   } else if (moisture > 0.65) {
-    return BiomeType.FOREST;
+    return TerrainType.FOREST;
   } else {
     // Transition
-    if (height > (thresholds.mountainStart * 0.8)) return BiomeType.FOREST; // Hills often forested
-    return BiomeType.GRASS;
+    if (height > (thresholds.mountainStart * 0.8)) return TerrainType.FOREST; // Hills often forested
+    return TerrainType.GRASS;
   }
+}
+
+/**
+ * Determines the Global Biome (Educational Layer) based on the same noise maps.
+ * Maps Height+Moisture to the 7 Global Biomes in JSON.
+ */
+export function getGlobalBiome(q: number, r: number, settings: MapSettings): GlobalBiomeDef {
+    const { height, moisture, isRiver, thresholds } = getTerrainData(q, r, settings);
+    
+    // 0: Rainforest, 1: Savanna, 2: Grassland, 3: Desert, 4: Taiga, 5: Tundra, 6: Wetlands
+
+    // 1. Water dominated (Rivers or Low Height + High Water noise)
+    if (isRiver) return GLOBAL_BIOMES_DATA[6]; // Wetlands
+    if (height < thresholds.water) {
+       // Ocean areas map to Wetlands for simplicity in this dataset, or we could add "Ocean" to JSON later.
+       // For now, let's treat shallow water near land as Wetlands context.
+       return GLOBAL_BIOMES_DATA[6]; 
+    }
+
+    // 2. High Altitude / Cold
+    if (height > thresholds.mountainStart) {
+        if (height > thresholds.snowStart) return GLOBAL_BIOMES_DATA[5]; // Tundra
+        return GLOBAL_BIOMES_DATA[4]; // Taiga
+    }
+
+    // 3. Moisture & Temp based
+    // Simulating Temp via Height (Lower = Hotter)
+    const relativeHeight = (height - thresholds.water) / (thresholds.mountainStart - thresholds.water);
+    const isHot = relativeHeight < 0.4;
+    const isTemperate = relativeHeight >= 0.4 && relativeHeight < 0.8;
+
+    if (moisture > 0.7) {
+        if (isHot) return GLOBAL_BIOMES_DATA[0]; // Rainforest
+        return GLOBAL_BIOMES_DATA[4]; // Taiga (Wet+Coldish)
+    } else if (moisture > 0.4) {
+        if (isHot) return GLOBAL_BIOMES_DATA[1]; // Savanna
+        return GLOBAL_BIOMES_DATA[2]; // Grassland
+    } else {
+        // Dry
+        if (isHot) return GLOBAL_BIOMES_DATA[3]; // Desert
+        return GLOBAL_BIOMES_DATA[2]; // Dry Grassland/Steppe
+    }
 }
 
 export function getElevation(q: number, r: number, settings: MapSettings): number {
@@ -231,13 +254,11 @@ export function getElevation(q: number, r: number, settings: MapSettings): numbe
   if (height < seaLevel) {
     // Underwater
     const depthRatio = 1 - (height / seaLevel); 
-    // If seaLevel is 0, avoid NaN
     if (seaLevel === 0) return 0;
     return Math.floor(-1000 - (depthRatio * 4000));
   }
 
   // Land
-  // Normalize seaLevel -> 1.0 to 0 -> 8848m
   const landRange = 1 - seaLevel;
   if (landRange <= 0.001) return 0; // Avoid divide by zero if world is 100% water
 
@@ -267,7 +288,15 @@ function shuffleDeterministic<T>(array: T[], q: number, r: number, seed: string,
   return copy;
 }
 
-export function getHexResources(q: number, r: number, seed: string, biome: BiomeType): HexResources {
+// Modified to accept a TerrainType and look up resources
+export function getHexResources(
+  q: number, 
+  r: number, 
+  seed: string, 
+  terrain: TerrainType, 
+  resourceData: Record<TerrainType, BiomeResourceData>,
+  globalBiomeConfig?: GlobalBiomeConfig
+): HexResources {
   const resources: HexResources = {
     animals: [],
     minerals: [],
@@ -276,15 +305,30 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
     droppedItems: []
   };
   
-  const data = BIOME_RESOURCES[biome];
-  if (!data) return resources;
+  const terrainData = resourceData[terrain];
+  if (!terrainData) return resources;
+
+  // Merge with custom resources from global biome if provided
+  const combinedData: BiomeResourceData = {
+      animals: [...terrainData.animals],
+      vegetation: [...terrainData.vegetation],
+      mineral_resources: [...terrainData.mineral_resources],
+      rare_stones: [...terrainData.rare_stones]
+  };
+
+  if (globalBiomeConfig && globalBiomeConfig.customResources) {
+      combinedData.animals.push(...globalBiomeConfig.customResources.animals);
+      combinedData.vegetation.push(...globalBiomeConfig.customResources.vegetation);
+      combinedData.mineral_resources.push(...globalBiomeConfig.customResources.mineral_resources);
+      combinedData.rare_stones.push(...globalBiomeConfig.customResources.rare_stones);
+  }
 
   // Vegetation
   const vegDensityRoll = getDeterministicRandom(q, r, seed, 'veg_density');
   if (vegDensityRoll < PROBABILITY.VEGETATION) {
      const vegCount = Math.floor(getDeterministicRandom(q, r, seed, 'veg_count') * 4) + 1;
-     if (data.vegetation.length > 0) {
-        const shuffled = shuffleDeterministic(data.vegetation, q, r, seed, 'veg_shuffle');
+     if (combinedData.vegetation.length > 0) {
+        const shuffled = shuffleDeterministic(combinedData.vegetation, q, r, seed, 'veg_shuffle');
         resources.vegetation = shuffled.slice(0, Math.min(vegCount, shuffled.length));
      }
   }
@@ -293,8 +337,8 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
   const animDensityRoll = getDeterministicRandom(q, r, seed, 'anim_density');
   if (animDensityRoll < PROBABILITY.ANIMALS) {
     const animCount = Math.floor(getDeterministicRandom(q, r, seed, 'anim_count') * 3) + 1;
-    if (data.animals.length > 0) {
-      const shuffled = shuffleDeterministic(data.animals, q, r, seed, 'anim_shuffle');
+    if (combinedData.animals.length > 0) {
+      const shuffled = shuffleDeterministic(combinedData.animals, q, r, seed, 'anim_shuffle');
       resources.animals = shuffled.slice(0, Math.min(animCount, shuffled.length));
     }
   }
@@ -303,8 +347,8 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
   const minDensityRoll = getDeterministicRandom(q, r, seed, 'min_density');
   if (minDensityRoll < PROBABILITY.MINERALS) {
     const minCount = Math.floor(getDeterministicRandom(q, r, seed, 'min_count') * 2) + 1;
-    if (data.mineral_resources.length > 0) {
-      const shuffled = shuffleDeterministic(data.mineral_resources, q, r, seed, 'min_shuffle');
+    if (combinedData.mineral_resources.length > 0) {
+      const shuffled = shuffleDeterministic(combinedData.mineral_resources, q, r, seed, 'min_shuffle');
       resources.minerals = shuffled.slice(0, Math.min(minCount, shuffled.length));
     }
   }
@@ -313,8 +357,8 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
   const rareRoll = getDeterministicRandom(q, r, seed, 'rare_density');
   if (rareRoll < PROBABILITY.RARE_STONES) {
     const rareCount = (getDeterministicRandom(q, r, seed, 'rare_count') > 0.8) ? 2 : 1;
-    if (data.rare_stones.length > 0) {
-      const shuffled = shuffleDeterministic(data.rare_stones, q, r, seed, 'rare_shuffle');
+    if (combinedData.rare_stones.length > 0) {
+      const shuffled = shuffleDeterministic(combinedData.rare_stones, q, r, seed, 'rare_shuffle');
       resources.rareStones = shuffled.slice(0, Math.min(rareCount, shuffled.length));
     }
   }

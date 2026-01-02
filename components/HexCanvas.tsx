@@ -1,9 +1,10 @@
+
 import React, { useRef, useEffect, useState } from 'react';
-import { BiomeType, HexCoordinate, MapSettings, SavedLocation } from '../types';
+import { TerrainType, HexCoordinate, MapSettings, SavedLocation } from '../types';
 import { hexToPixel, getHexRing, pixelToHex, hexDistance } from '../utils/hexMath';
-import { getBiome } from '../utils/rng';
+import { getTerrain } from '../utils/rng';
 import { generateBiomeTextures } from '../utils/biomeTextures';
-import { BIOME_COLORS } from '../constants';
+import { TERRAIN_COLORS } from '../constants';
 
 interface HexCanvasProps {
   playerPos: HexCoordinate;
@@ -12,12 +13,11 @@ interface HexCanvasProps {
   height: number;
   rotation: number; // degrees
   savedLocations: SavedLocation[];
-  onHexClick: (hex: HexCoordinate) => void; // CHANGED: Generic click handler
+  onHexClick: (hex: HexCoordinate) => void;
   selectedLocation: SavedLocation | null;
 }
 
 // Pre-calculate corners for a hexagon of size 1 relative to (0,0)
-// Pointy top angles: -30, 30, 90, 150, 210, 270 (-90)
 const HEX_CORNERS = [0, 1, 2, 3, 4, 5].map(i => {
   const angle_deg = 60 * i - 30;
   const angle_rad = Math.PI / 180 * angle_deg;
@@ -38,7 +38,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
   selectedLocation
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [textures, setTextures] = useState<Record<BiomeType, CanvasPattern | string> | null>(null);
+  const [textures, setTextures] = useState<Record<TerrainType, CanvasPattern | string> | null>(null);
 
   // Initialize Textures only once when context is available
   useEffect(() => {
@@ -58,15 +58,12 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Handle high DPI displays
     const dpr = window.devicePixelRatio || 1;
-    // Only set width/height if they differ to avoid flicker
     if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
         canvas.width = width * dpr;
         canvas.height = height * dpr;
         ctx.scale(dpr, dpr);
     } else {
-        // Just reset transform if dimensions matched
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
@@ -76,20 +73,18 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     ctx.save();
 
-    // 1. Move origin to center of screen. Use Math.floor to ensure integer alignment to prevent blur.
+    // 1. Move origin to center of screen
     ctx.translate(Math.floor(width / 2), Math.floor(height / 2));
 
     // 2. Apply Rotation
     const rad = (rotation * Math.PI) / 180;
     ctx.rotate(rad);
 
-    // 3. Move world so player is at the new origin (camera center)
+    // 3. Move world so player is at the new origin
     const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
-    // Integer align the world camera position to prevent swimming artifacts
     ctx.translate(-centerPix.x, -centerPix.y);
 
     // Get Visible Hexes
-    // Increase radius slightly to cover corners when rotated
     const hexes = getHexRing(playerPos, settings.renderRadius + 3);
 
     // Draw Hexes
@@ -135,7 +130,6 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     return pixelToHex(worldX, worldY, settings.hexSize);
   };
 
-  // Handle Canvas Clicks
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const clickedHex = getHexFromMouseEvent(e);
     if (!clickedHex) return;
@@ -148,11 +142,10 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     hex: HexCoordinate, 
     size: number, 
     currentSettings: MapSettings, 
-    textureMap: Record<BiomeType, CanvasPattern | string>
+    textureMap: Record<TerrainType, CanvasPattern | string>
   ) => {
     const { x, y } = hexToPixel(hex.q, hex.r, size);
     
-    // Draw using pre-calculated corners to ensure perfect consistent geometry
     ctx.beginPath();
     ctx.moveTo(x + HEX_CORNERS[0].x * size, y + HEX_CORNERS[0].y * size);
     for (let i = 1; i < 6; i++) {
@@ -160,19 +153,18 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     }
     ctx.closePath();
 
-    const biome = getBiome(hex.q, hex.r, currentSettings);
+    const terrain = getTerrain(hex.q, hex.r, currentSettings);
     
     // Apply Texture
-    if (textureMap && textureMap[biome]) {
-        ctx.fillStyle = textureMap[biome];
+    if (textureMap && textureMap[terrain]) {
+        ctx.fillStyle = textureMap[terrain];
     } else {
-        ctx.fillStyle = BIOME_COLORS[biome];
+        ctx.fillStyle = TERRAIN_COLORS[terrain];
     }
     
     ctx.fill();
 
     // --- 3D Lighting Effect (Overlay) ---
-    // Simulates sunlight from Top-Left (Global coordinates, so it rotates with the map)
     const grad = ctx.createLinearGradient(x - size, y - size, x + size, y + size);
     grad.addColorStop(0, 'rgba(255, 255, 255, 0.15)'); // Highlight
     grad.addColorStop(0.5, 'rgba(0,0,0,0)');
@@ -181,9 +173,9 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Standard Border (Thicker)
+    // Standard Border
     ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 2; // Thicker default border
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     if (size > 30) {
@@ -197,12 +189,9 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
   const drawMarker = (ctx: CanvasRenderingContext2D, loc: SavedLocation, size: number) => {
     const { x, y } = hexToPixel(loc.x, loc.y, size);
-
-    // Draw a Pin shape
     const pinHeight = size * 1.0;
     const pinWidth = size * 0.6;
     
-    // Drop Shadow for marker
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetX = 2;
@@ -217,7 +206,6 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.fillStyle = '#DA954B';
     ctx.fill();
     
-    // Reset shadow
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
@@ -227,7 +215,6 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.strokeStyle = '#000000';
     ctx.stroke();
 
-    // Small dot in center of the head
     ctx.beginPath();
     ctx.arc(x, y - pinHeight * 0.6, size * 0.2, 0, Math.PI * 2);
     ctx.fillStyle = '#1e293b'; 
@@ -237,7 +224,6 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
   const drawPlayer = (ctx: CanvasRenderingContext2D, hex: HexCoordinate, size: number) => {
     const { x, y } = hexToPixel(hex.q, hex.r, size);
     
-    // Draw a glowing ring
     ctx.beginPath();
     ctx.arc(x, y, size * 0.6, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
@@ -246,10 +232,9 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.fill();
     ctx.shadowBlur = 0; 
 
-    // Inner dot
     ctx.beginPath();
     ctx.arc(x, y, size * 0.3, 0, Math.PI * 2);
-    ctx.fillStyle = '#ef4444'; // Red
+    ctx.fillStyle = '#ef4444';
     ctx.fill();
   };
 

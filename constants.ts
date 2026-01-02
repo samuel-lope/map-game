@@ -1,29 +1,29 @@
 
-import { BiomeType, BiomeResourceData, BiomeWeights, CraftingRecipe, CraftingCategory } from './types';
+import { TerrainType, BiomeResourceData, TerrainWeights, CraftingRecipe, CraftingCategory, GlobalBiomeDef } from './types';
 
 // 128-bit Hex Seed (32 chars)
 export const DEFAULT_SEED = "A3726246D353E0C7ADEA4FF766C4D6E7";
 export const DEFAULT_HEX_SIZE = 25; // Pixels
 export const DEFAULT_RENDER_RADIUS = 5; // 5 Hexes * 500m = 2500m
 
-export const DEFAULT_BIOME_WEIGHTS: BiomeWeights = {
-  [BiomeType.DEEP_WATER]: 20,
-  [BiomeType.WATER]: 20,
-  [BiomeType.SAND]: 15,
-  [BiomeType.GRASS]: 25,
-  [BiomeType.FOREST]: 15,
-  [BiomeType.MOUNTAIN]: 4,
-  [BiomeType.SNOW]: 1,
+export const DEFAULT_TERRAIN_WEIGHTS: TerrainWeights = {
+  [TerrainType.DEEP_WATER]: 20,
+  [TerrainType.WATER]: 20,
+  [TerrainType.SAND]: 15,
+  [TerrainType.GRASS]: 25,
+  [TerrainType.FOREST]: 15,
+  [TerrainType.MOUNTAIN]: 4,
+  [TerrainType.SNOW]: 1,
 };
 
-export const BIOME_COLORS: Record<BiomeType, string> = {
-  [BiomeType.DEEP_WATER]: '#1e3a8a', // Blue 900
-  [BiomeType.WATER]: '#3b82f6',      // Blue 500
-  [BiomeType.SAND]: '#fde047',       // Yellow 300
-  [BiomeType.GRASS]: '#4ade80',      // Green 400
-  [BiomeType.FOREST]: '#15803d',     // Green 700
-  [BiomeType.MOUNTAIN]: '#78716c',   // Stone 500
-  [BiomeType.SNOW]: '#f8fafc',       // Slate 50
+export const TERRAIN_COLORS: Record<TerrainType, string> = {
+  [TerrainType.DEEP_WATER]: '#1e3a8a', // Blue 900
+  [TerrainType.WATER]: '#3b82f6',      // Blue 500
+  [TerrainType.SAND]: '#fde047',       // Yellow 300
+  [TerrainType.GRASS]: '#4ade80',      // Green 400
+  [TerrainType.FOREST]: '#15803d',     // Green 700
+  [TerrainType.MOUNTAIN]: '#78716c',   // Stone 500
+  [TerrainType.SNOW]: '#f8fafc',       // Slate 50
 };
 
 // Movement directions for Pointy Top Hexagons (Axial Coordinates)
@@ -47,8 +47,125 @@ export const PROBABILITY = {
 // Helper to generate placeholder images (Simulating external 512x512 links)
 const img = (text: string, color: string = '444') => `https://placehold.co/512x512/${color}/FFF/png?text=${encodeURIComponent(text)}`;
 
-export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
-  [BiomeType.DEEP_WATER]: {
+// --- GLOBAL BIOME DATA (GEOGRAPHIC) ---
+export const GLOBAL_BIOMES_DATA: GlobalBiomeDef[] = [
+  {
+    id: "rainforest",
+    defaultTerrains: [TerrainType.FOREST, TerrainType.DEEP_WATER, TerrainType.WATER],
+    pt_br: {
+      nome_global: "Floresta Tropical e Equatorial",
+      caracteristica: "Clima quente, alta pluviosidade e biodiversidade densa."
+    },
+    en_us: {
+      nome_global: "Tropical and Equatorial Rainforest",
+      caracteristica: "Warm climate, high rainfall, and dense biodiversity."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Amazônia", paises_prevalencia: ["Brasil", "Peru", "Colômbia", "Venezuela", "Equador", "Bolívia"] }, en_us: { nome_regional: "Amazon", paises_prevalencia: ["Brazil", "Peru", "Colombia", "Venezuela", "Ecuador", "Bolivia"] } },
+      { pt_br: { nome_regional: "Mata Atlântica", paises_prevalencia: ["Brasil", "Paraguai", "Argentina"] }, en_us: { nome_regional: "Atlantic Forest", paises_prevalencia: ["Brazil", "Paraguay", "Argentina"] } },
+      { pt_br: { nome_regional: "Floresta do Congo", paises_prevalencia: ["República Democrática do Congo", "Congo", "Gabão", "Camarões"] }, en_us: { nome_regional: "Congo Rainforest", paises_prevalencia: ["Democratic Republic of the Congo", "Congo", "Gabon", "Cameroon"] } }
+    ]
+  },
+  {
+    id: "savanna",
+    defaultTerrains: [TerrainType.GRASS, TerrainType.SAND],
+    pt_br: {
+      nome_global: "Savana",
+      caracteristica: "Vegetação de gramíneas com árvores esparsas e estações seca/chuvosa definidas."
+    },
+    en_us: {
+      nome_global: "Savanna",
+      caracteristica: "Grassland vegetation with scattered trees and defined wet/dry seasons."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Cerrado", paises_prevalencia: ["Brasil", "Paraguai"] }, en_us: { nome_regional: "Cerrado (Brazilian Savanna)", paises_prevalencia: ["Brazil", "Paraguay"] } },
+      { pt_br: { nome_regional: "Savana Africana", paises_prevalencia: ["Quênia", "Tanzânia", "África do Sul", "Botsuana", "Namíbia"] }, en_us: { nome_regional: "African Savanna", paises_prevalencia: ["Kenya", "Tanzania", "South Africa", "Botswana", "Namibia"] } }
+    ]
+  },
+  {
+    id: "grassland",
+    defaultTerrains: [TerrainType.GRASS],
+    pt_br: {
+      nome_global: "Pradarias e Estepes (Campos Temperados)",
+      caracteristica: "Dominado por vegetação rasteira, solo fértil e clima temperado."
+    },
+    en_us: {
+      nome_global: "Grasslands and Steppes (Temperate)",
+      caracteristica: "Dominated by low vegetation, fertile soil, and temperate climate."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Pampa", paises_prevalencia: ["Brasil", "Argentina", "Uruguai"] }, en_us: { nome_regional: "Pampas", paises_prevalencia: ["Brazil", "Argentina", "Uruguay"] } },
+      { pt_br: { nome_regional: "Pradarias", paises_prevalencia: ["Estados Unidos", "Canadá"] }, en_us: { nome_regional: "Prairies", paises_prevalencia: ["United States", "Canada"] } }
+    ]
+  },
+  {
+    id: "desert",
+    defaultTerrains: [TerrainType.SAND],
+    pt_br: {
+      nome_global: "Desertos e Áreas Semiáridas",
+      caracteristica: "Baixíssima umidade, escassez de água e vegetação adaptada."
+    },
+    en_us: {
+      nome_global: "Deserts and Semi-arid Areas",
+      caracteristica: "Very low humidity, water scarcity, and adapted vegetation."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Caatinga", paises_prevalencia: ["Brasil"] }, en_us: { nome_regional: "Caatinga", paises_prevalencia: ["Brazil"] } },
+      { pt_br: { nome_regional: "Saara", paises_prevalencia: ["Egito", "Argélia", "Líbia", "Marrocos", "Mali"] }, en_us: { nome_regional: "Sahara", paises_prevalencia: ["Egypt", "Algeria", "Libya", "Morocco", "Mali"] } }
+    ]
+  },
+  {
+    id: "taiga",
+    defaultTerrains: [TerrainType.FOREST, TerrainType.SNOW],
+    pt_br: {
+      nome_global: "Floresta Boreal (Taiga)",
+      caracteristica: "Florestas de coníferas em regiões de alta latitude e invernos rigorosos."
+    },
+    en_us: {
+      nome_global: "Boreal Forest (Taiga)",
+      caracteristica: "Coniferous forests in high-latitude regions with harsh winters."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Taiga", paises_prevalencia: ["Rússia", "Suécia", "Noruega", "Finlândia"] }, en_us: { nome_regional: "Taiga", paises_prevalencia: ["Russia", "Sweden", "Norway", "Finland"] } }
+    ]
+  },
+  {
+    id: "tundra",
+    defaultTerrains: [TerrainType.SNOW, TerrainType.MOUNTAIN],
+    pt_br: {
+      nome_global: "Tundra",
+      caracteristica: "Vegetação rasteira sobre solo permanentemente congelado."
+    },
+    en_us: {
+      nome_global: "Tundra",
+      caracteristica: "Low-lying vegetation over permanently frozen soil."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Tundra Ártica", paises_prevalencia: ["Rússia", "Canadá", "Estados Unidos", "Groenlândia"] }, en_us: { nome_regional: "Arctic Tundra", paises_prevalencia: ["Russia", "Canada", "United States", "Greenland"] } }
+    ]
+  },
+  {
+    id: "wetlands",
+    defaultTerrains: [TerrainType.WATER, TerrainType.GRASS, TerrainType.DEEP_WATER],
+    pt_br: {
+      nome_global: "Zonas Úmidas (Pantanal)",
+      caracteristica: "Planícies de inundação periódica com alta concentração de fauna aquática."
+    },
+    en_us: {
+      nome_global: "Wetlands (Pantanal)",
+      caracteristica: "Periodically flooded plains with high concentration of aquatic fauna."
+    },
+    variacoes_regionais: [
+      { pt_br: { nome_regional: "Pantanal", paises_prevalencia: ["Brasil", "Bolívia", "Paraguai"] }, en_us: { nome_regional: "Pantanal", paises_prevalencia: ["Brazil", "Bolivia", "Paraguay"] } },
+      { pt_br: { nome_regional: "Everglades", paises_prevalencia: ["Estados Unidos"] }, en_us: { nome_regional: "Everglades", paises_prevalencia: ["United States"] } }
+    ]
+  }
+];
+
+
+// --- RESOURCES LINKED TO PHYSICAL TERRAIN (DEFAULT) ---
+export const TERRAIN_RESOURCES: Record<TerrainType, BiomeResourceData> = {
+  [TerrainType.DEEP_WATER]: {
     animals: [
       { en: "Giant Squid", pt: "Lula Gigante", image: img("Giant Squid", "00008B") },
       { en: "Anglerfish", pt: "Peixe-Diabo", image: img("Anglerfish", "2F4F4F") },
@@ -86,7 +203,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
        { pt: "Coral de Chifre", en: "Horn Coral", image: img("Horn Coral", "DA70D6") }
     ]
   },
-  [BiomeType.WATER]: {
+  [TerrainType.WATER]: {
     animals: [
       { en: "Salmon", pt: "Salmão", image: img("Salmon", "FA8072") },
       { en: "Turtle", pt: "Tartaruga", image: img("Turtle", "2E8B57") },
@@ -109,7 +226,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
       { pt: "Musgo", en: "Moss Block", image: img("Moss", "556B2F") }
     ]
   },
-  [BiomeType.SAND]: {
+  [TerrainType.SAND]: {
     animals: [
       { en: "Camel", pt: "Camelo", image: img("Camel", "C19A6B") },
       { en: "Scorpion", pt: "Escorpião", image: img("Scorpion", "8B0000") },
@@ -146,7 +263,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
       { pt: "Acácia", en: "Acacia", image: img("Acacia", "FF8C00") } 
     ]
   },
-  [BiomeType.GRASS]: {
+  [TerrainType.GRASS]: {
     animals: [
       { en: "Horse", pt: "Cavalo", image: img("Horse", "8B4513") },
       { en: "Cow", pt: "Vaca", image: img("Cow", "000000") },
@@ -218,7 +335,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
       { pt: "Melancia", en: "Melon", image: img("Melon", "008000") }
     ]
   },
-  [BiomeType.FOREST]: {
+  [TerrainType.FOREST]: {
     animals: [
       { en: "Deer", pt: "Cervo", image: img("Deer", "8B4513") },
       { en: "Wolf", pt: "Lobo", image: img("Wolf", "808080") },
@@ -295,7 +412,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
       { pt: "Bambu", en: "Bamboo", image: img("Bamboo", "00FF00") }
     ]
   },
-  [BiomeType.MOUNTAIN]: {
+  [TerrainType.MOUNTAIN]: {
     animals: [
       { en: "Mountain Goat", pt: "Cabra da Montanha", image: img("Goat", "FFFFFF") },
       { en: "Eagle", pt: "Águia", image: img("Eagle", "8B4513") },
@@ -344,7 +461,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
       { pt: "Bagas Brilhantes", en: "Glow Berries", image: img("Glow Berries", "FFA500") }
     ]
   },
-  [BiomeType.SNOW]: {
+  [TerrainType.SNOW]: {
     animals: [
       { en: "Polar Bear", pt: "Urso Polar", image: img("Polar Bear", "FFFFFF") },
       { en: "Penguin", pt: "Pinguim", image: img("Penguin", "000000") },

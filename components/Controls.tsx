@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
-import { MapSettings, HexCoordinate, BiomeType, SavedLocation, Language, HexResources } from '../types';
-import { getBiome, getElevation } from '../utils/rng';
+import { MapSettings, HexCoordinate, TerrainType, SavedLocation, Language, HexResources, LocalizedName, GlobalBiomeDef } from '../types';
+import { getTerrain, getElevation, getGlobalBiome } from '../utils/rng';
 
 interface ControlsProps {
   settings: MapSettings;
@@ -22,6 +23,9 @@ interface ControlsProps {
   currentResources: HexResources;
   // Minimap
   onOpenMinimap?: () => void;
+  // Educational Editing
+  onEditBiome?: (biome: GlobalBiomeDef) => void; // UPDATED to Global Biome
+  onEditResource?: (item: LocalizedName, category: string, terrain: TerrainType) => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
@@ -39,10 +43,13 @@ const Controls: React.FC<ControlsProps> = ({
   language,
   setLanguage,
   currentResources,
-  onOpenMinimap
+  onOpenMinimap,
+  onEditBiome,
+  onEditResource
 }) => {
   
-  const currentBiome = getBiome(playerPos.q, playerPos.r, settings);
+  const currentTerrain = getTerrain(playerPos.q, playerPos.r, settings);
+  const currentGlobalBiome = getGlobalBiome(playerPos.q, playerPos.r, settings);
   const elevation = getElevation(playerPos.q, playerPos.r, settings);
 
   // --- Local UI State for Modals ---
@@ -84,6 +91,9 @@ const Controls: React.FC<ControlsProps> = ({
     currentResources.animals.length === 0 &&
     currentResources.minerals.length === 0 &&
     currentResources.rareStones.length === 0;
+
+  // Language Key Map for Global Biome Props
+  const langKey = language === 'pt' ? 'pt_br' : 'en_us';
 
   return (
     <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
@@ -252,7 +262,6 @@ const Controls: React.FC<ControlsProps> = ({
              <span className="text-slate-400">Y (r):</span> <span className="font-mono">{playerPos.r}</span>
            </div>
            
-           {/* Total Traveled (Odometer) */}
            <div className="flex justify-between text-sm mb-1">
              <span className="text-slate-400">{language === 'pt' ? 'Percorrido:' : 'Traveled:'}</span> 
              <span className="font-mono text-blue-400">
@@ -260,7 +269,6 @@ const Controls: React.FC<ControlsProps> = ({
              </span>
            </div>
 
-           {/* Distance from Spawn (Radius) */}
            <div className="flex justify-between text-sm mb-1">
              <span className="text-slate-400">{language === 'pt' ? 'Raio:' : 'Radius:'}</span> 
              <span className="font-mono text-purple-400">
@@ -274,14 +282,39 @@ const Controls: React.FC<ControlsProps> = ({
                {elevation}m
              </span>
            </div>
+           
+           {/* BIOME & TERRAIN */}
            <div className="mt-3 pt-2 border-t border-slate-700">
-             <span className="text-xs uppercase text-slate-500 block mb-1">Current Terrain</span>
-             <span className="font-bold text-lg" style={{ color: currentBiome === BiomeType.SNOW ? '#fff' : '#4ade80' }}>
-               {currentBiome}
-             </span>
+             
+             {/* Terrain (Visual) */}
+             <div className="mb-2">
+                 <span className="text-xs uppercase text-slate-500 block">
+                    {language === 'pt' ? 'Terreno (Visual)' : 'Terrain (Visual)'}
+                 </span>
+                 <span 
+                    className="font-bold text-md" 
+                    style={{ color: '#fff' }}
+                 >
+                   {currentTerrain.replace('_', ' ')}
+                 </span>
+             </div>
+
+             {/* Global Biome (Logical/Educational) */}
+             <div>
+                 <span className="text-xs uppercase text-slate-500 block mb-1">
+                    {language === 'pt' ? 'Bioma Global' : 'Global Biome'}
+                 </span>
+                 <button 
+                    onClick={() => onEditBiome && onEditBiome(currentGlobalBiome)}
+                    className="font-bold text-sm text-yellow-400 hover:text-yellow-300 hover:underline cursor-pointer transition-colors text-left leading-tight" 
+                    title={language === 'pt' ? 'Clique para configurar Bioma' : 'Click to configure Biome'}
+                 >
+                   {currentGlobalBiome[langKey].nome_global}
+                 </button>
+             </div>
            </div>
 
-           {/* Resources Section - MULTIPLE ITEMS */}
+           {/* Resources Section */}
            <div className="mt-3 pt-2 border-t border-slate-700">
              <div className="flex justify-between items-center mb-2">
                 <span className="text-xs uppercase text-slate-500">Findings</span>
@@ -296,7 +329,7 @@ const Controls: React.FC<ControlsProps> = ({
                   <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Nada encontrado.' : 'Nothing found.'}</span>
                 )}
 
-                {/* Dropped Items (ITEMS NO CHÃO) */}
+                {/* Dropped Items */}
                 {currentResources.droppedItems.length > 0 && (
                   <div className="flex flex-col gap-1 mb-2">
                      <span className="text-xs text-blue-400 font-bold uppercase tracking-wide">
@@ -317,7 +350,12 @@ const Controls: React.FC<ControlsProps> = ({
                   <div className="flex flex-col gap-1">
                      <span className="text-xs text-green-500/80 font-bold uppercase tracking-wide">Vegetation</span>
                      {currentResources.vegetation.map((veg, i) => (
-                       <div key={i} className="flex items-center gap-2 pl-1">
+                       <div 
+                         key={i} 
+                         className="flex items-center gap-2 pl-1 cursor-pointer hover:bg-slate-800/50 rounded transition-colors"
+                         onClick={() => onEditResource && onEditResource(veg, 'vegetation', currentTerrain)}
+                         title={language === 'pt' ? 'Configurar Recurso' : 'Configure Resource'}
+                       >
                          <span className="text-sm">🌿</span>
                          <span className="text-green-200 text-xs font-semibold">{veg[language]}</span>
                        </div>
@@ -330,7 +368,12 @@ const Controls: React.FC<ControlsProps> = ({
                   <div className="flex flex-col gap-1">
                      <span className="text-xs text-orange-500/80 font-bold uppercase tracking-wide">Fauna</span>
                      {currentResources.animals.map((anim, i) => (
-                       <div key={i} className="flex items-center gap-2 pl-1 animate-pulse">
+                       <div 
+                         key={i} 
+                         className="flex items-center gap-2 pl-1 animate-pulse cursor-pointer hover:bg-slate-800/50 rounded transition-colors"
+                         onClick={() => onEditResource && onEditResource(anim, 'animals', currentTerrain)}
+                         title={language === 'pt' ? 'Configurar Recurso' : 'Configure Resource'}
+                       >
                          <span className="text-sm">🐾</span>
                          <span className="text-orange-200 text-xs font-semibold">{anim[language]}</span>
                        </div>
@@ -343,7 +386,12 @@ const Controls: React.FC<ControlsProps> = ({
                   <div className="flex flex-col gap-1">
                      <span className="text-xs text-stone-500/80 font-bold uppercase tracking-wide">Minerals</span>
                      {currentResources.minerals.map((min, i) => (
-                       <div key={i} className="flex items-center gap-2 pl-1">
+                       <div 
+                         key={i} 
+                         className="flex items-center gap-2 pl-1 cursor-pointer hover:bg-slate-800/50 rounded transition-colors"
+                         onClick={() => onEditResource && onEditResource(min, 'mineral_resources', currentTerrain)}
+                         title={language === 'pt' ? 'Configurar Recurso' : 'Configure Resource'}
+                       >
                          <span className="text-sm">⛏️</span>
                          <span className="text-stone-300 text-xs font-semibold">{min[language]}</span>
                        </div>
@@ -356,7 +404,12 @@ const Controls: React.FC<ControlsProps> = ({
                   <div className="flex flex-col gap-1">
                      <span className="text-xs text-purple-500/80 font-bold uppercase tracking-wide">Rare Findings</span>
                      {currentResources.rareStones.map((rare, i) => (
-                        <div key={i} className="flex items-center gap-2 mt-1 bg-purple-900/30 p-1 rounded border border-purple-500/30">
+                        <div 
+                          key={i} 
+                          className="flex items-center gap-2 mt-1 bg-purple-900/30 p-1 rounded border border-purple-500/30 cursor-pointer hover:bg-purple-900/50 transition-colors"
+                          onClick={() => onEditResource && onEditResource(rare, 'rare_stones', currentTerrain)}
+                          title={language === 'pt' ? 'Configurar Recurso' : 'Configure Resource'}
+                        >
                           <span className="text-sm">💎</span>
                           <span className="text-purple-300 font-bold text-xs drop-shadow-md">{rare[language]}</span>
                         </div>

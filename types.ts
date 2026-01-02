@@ -9,7 +9,8 @@ export interface PixelCoordinate {
   y: number;
 }
 
-export enum BiomeType {
+// Renamed from BiomeType to TerrainType (Physical visual layer)
+export enum TerrainType {
   DEEP_WATER = 'DEEP_WATER',
   WATER = 'WATER',
   SAND = 'SAND',
@@ -21,17 +22,17 @@ export enum BiomeType {
 
 export interface HexData {
   coord: HexCoordinate;
-  biome: BiomeType;
+  terrain: TerrainType;
   height: number; // 0 to 1
 }
 
-export type BiomeWeights = Record<BiomeType, number>;
+export type TerrainWeights = Record<TerrainType, number>;
 
 export interface MapSettings {
   hexSize: number;
   renderRadius: number;
   seed: string;
-  biomeWeights: BiomeWeights;
+  terrainWeights: TerrainWeights;
 }
 
 export interface SavedLocation {
@@ -60,6 +61,25 @@ export interface ExploredBounds {
   maxR: number;
 }
 
+// Global Biome Structure (From JSON)
+export interface RegionalVariant {
+  pt_br: { nome_regional: string; paises_prevalencia: string[] };
+  en_us: { nome_regional: string; paises_prevalencia: string[] };
+}
+
+export interface GlobalBiomeDef {
+  id: string; // Internal ID for logic
+  defaultTerrains: TerrainType[]; // Default physical terrains associated
+  pt_br: { nome_global: string; caracteristica: string };
+  en_us: { nome_global: string; caracteristica: string };
+  variacoes_regionais: RegionalVariant[];
+}
+
+export interface GlobalBiomeConfig {
+  associatedTerrains: TerrainType[]; // Which terrains are educationaly linked to this biome
+  customResources: BiomeResourceData;
+}
+
 export interface MapSaveData {
   seed: string;
   x: number; // Current q
@@ -67,17 +87,22 @@ export interface MapSaveData {
   altitude: number;
   saved_positions: SavedLocation[];
   inventory?: InventoryContainer[]; 
-  dropped_items?: Record<string, InventoryItem[]>; // Key: "q,r", Value: Items
-  start_x?: number; // Origin q
-  start_y?: number; // Origin r
+  dropped_items?: Record<string, InventoryItem[]>;
+  start_x?: number;
+  start_y?: number;
   explored_bounds?: ExploredBounds;
-  biome_weights?: BiomeWeights; 
+  terrain_weights?: TerrainWeights; 
+  // Key is the Global Biome ID (index or slug)
+  global_biome_configs?: Record<string, GlobalBiomeConfig>;
+  // Legacy support for per-terrain resources if needed, or moved to global
+  terrain_resources?: Record<TerrainType, BiomeResourceData>;
 }
 
 export interface LocalizedName {
   pt: string;
   en: string;
   image?: string; // URL for 512x512 image
+  educational_info?: string;
 }
 
 export interface HarvestableMaterial extends LocalizedName {}
@@ -99,7 +124,7 @@ export interface HexResources {
   minerals: LocalizedName[];
   rareStones: LocalizedName[];
   vegetation: VegetationDefinition[];
-  droppedItems: InventoryItem[]; // Items dropped by player
+  droppedItems: InventoryItem[];
 }
 
 export enum CraftingCategory {
@@ -113,7 +138,7 @@ export enum CraftingCategory {
 export interface CraftingRecipe {
   id: string;
   category: CraftingCategory;
-  inputs: { nameEn: string; quantity: number }[]; // Match by English name for stability
+  inputs: { nameEn: string; quantity: number }[];
   output: LocalizedName & { quantity: number };
 }
 

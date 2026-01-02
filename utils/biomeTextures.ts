@@ -1,4 +1,5 @@
-import { BiomeType } from '../types';
+
+import { TerrainType } from '../types';
 
 /**
  * Creates a seamless noise texture for realistic terrain.
@@ -15,10 +16,10 @@ function createNoisePattern(ctx: CanvasRenderingContext2D, width: number, height
 }
 
 /**
- * Generates a CanvasPattern for a specific biome.
+ * Generates a CanvasPattern for a specific terrain.
  */
-export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record<BiomeType, CanvasPattern | string> {
-  const textures: Partial<Record<BiomeType, CanvasPattern | string>> = {};
+export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record<TerrainType, CanvasPattern | string> {
+  const textures: Partial<Record<TerrainType, CanvasPattern | string>> = {};
   const size = 64; // Texture tile size
 
   const createTile = (drawFn: (ctx: CanvasRenderingContext2D) => void) => {
@@ -35,7 +36,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   };
 
   // --- DEEP WATER (Dark, wavy, mysterious) ---
-  textures[BiomeType.DEEP_WATER] = createTile((ctx) => {
+  textures[TerrainType.DEEP_WATER] = createTile((ctx) => {
     // Base
     ctx.fillStyle = '#0f172a'; // Deep Slate Blue
     ctx.fillRect(0, 0, size, size);
@@ -53,7 +54,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   });
 
   // --- WATER (Lighter, ripples) ---
-  textures[BiomeType.WATER] = createTile((ctx) => {
+  textures[TerrainType.WATER] = createTile((ctx) => {
     ctx.fillStyle = '#3b82f6'; // Blue 500
     ctx.fillRect(0, 0, size, size);
     
@@ -72,7 +73,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   });
 
   // --- SAND (Grainy, dunes) ---
-  textures[BiomeType.SAND] = createTile((ctx) => {
+  textures[TerrainType.SAND] = createTile((ctx) => {
     ctx.fillStyle = '#e2c58b'; // Real sand color (tan)
     ctx.fillRect(0, 0, size, size);
     
@@ -89,7 +90,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   });
 
   // --- GRASS (Blade strokes, earthy) ---
-  textures[BiomeType.GRASS] = createTile((ctx) => {
+  textures[TerrainType.GRASS] = createTile((ctx) => {
     ctx.fillStyle = '#4ade80'; // Base Green
     ctx.fillRect(0, 0, size, size);
     
@@ -108,7 +109,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   });
 
   // --- FOREST (Dense, canopy blobs) ---
-  textures[BiomeType.FOREST] = createTile((ctx) => {
+  textures[TerrainType.FOREST] = createTile((ctx) => {
     ctx.fillStyle = '#166534'; // Dark Green Base
     ctx.fillRect(0, 0, size, size);
     
@@ -126,7 +127,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   });
 
   // --- MOUNTAIN (Rock facets, jagged) ---
-  textures[BiomeType.MOUNTAIN] = createTile((ctx) => {
+  textures[TerrainType.MOUNTAIN] = createTile((ctx) => {
     ctx.fillStyle = '#78716c'; // Stone Base
     ctx.fillRect(0, 0, size, size);
     
@@ -146,7 +147,7 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
   });
 
   // --- SNOW (White, subtle blue noise, smooth) ---
-  textures[BiomeType.SNOW] = createTile((ctx) => {
+  textures[TerrainType.SNOW] = createTile((ctx) => {
     ctx.fillStyle = '#f8fafc'; // White base
     ctx.fillRect(0, 0, size, size);
     
@@ -160,5 +161,5 @@ export function generateBiomeTextures(mainCtx: CanvasRenderingContext2D): Record
     createNoisePattern(ctx, size, size, 0.05, '#3b82f6', 1); // Blue tint
   });
 
-  return textures as Record<BiomeType, CanvasPattern>;
+  return textures as Record<TerrainType, CanvasPattern>;
 }

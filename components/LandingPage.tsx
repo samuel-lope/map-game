@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
 import { generateHexSeed } from '../utils/rng';
-import { BiomeType, BiomeWeights } from '../types';
-import { DEFAULT_BIOME_WEIGHTS, BIOME_COLORS } from '../constants';
+import { TerrainType, TerrainWeights } from '../types';
+import { DEFAULT_TERRAIN_WEIGHTS, TERRAIN_COLORS } from '../constants';
 
 interface LandingPageProps {
   seed: string;
   setSeed: (seed: string) => void;
-  weights: BiomeWeights;
-  setWeights: (weights: BiomeWeights) => void;
+  weights: TerrainWeights;
+  setWeights: (weights: TerrainWeights) => void;
   onStart: () => void;
 }
 
@@ -24,10 +24,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ seed, setSeed, weights, setWe
     setSeed(val);
   };
 
-  const handleWeightChange = (biome: BiomeType, value: number) => {
+  const handleWeightChange = (terrain: TerrainType, value: number) => {
     setWeights({
       ...weights,
-      [biome]: value
+      [terrain]: value
     });
   };
 
@@ -84,27 +84,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ seed, setSeed, weights, setWe
                onClick={() => setShowAdvanced(!showAdvanced)}
                className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-2"
              >
-               <span>{showAdvanced ? '▼' : '▶'}</span> CONFIGURAÇÃO DE BIOMAS (PROBABILIDADE)
+               <span>{showAdvanced ? '▼' : '▶'}</span> CONFIGURAÇÃO DE TERRENOS (PROBABILIDADE)
              </button>
 
              {showAdvanced && (
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 animate-in fade-in slide-in-from-top-2">
-                 {(Object.keys(DEFAULT_BIOME_WEIGHTS) as BiomeType[]).map((biome) => (
-                   <div key={biome} className="flex flex-col gap-1 bg-slate-900/50 p-2 rounded border border-slate-700">
+                 {(Object.keys(DEFAULT_TERRAIN_WEIGHTS) as TerrainType[]).map((terrain) => (
+                   <div key={terrain} className="flex flex-col gap-1 bg-slate-900/50 p-2 rounded border border-slate-700">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: BIOME_COLORS[biome] }}></div>
-                          {biome}
+                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: TERRAIN_COLORS[terrain] }}></div>
+                          {terrain}
                         </span>
-                        <span className="text-xs font-mono text-slate-400">{weights[biome]}</span>
+                        <span className="text-xs font-mono text-slate-400">{weights[terrain]}</span>
                       </div>
                       <input 
                         type="range"
                         min="0"
                         max="100"
                         step="1"
-                        value={weights[biome]}
-                        onChange={(e) => handleWeightChange(biome, parseInt(e.target.value))}
+                        value={weights[terrain]}
+                        onChange={(e) => handleWeightChange(terrain, parseInt(e.target.value))}
                         className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                       />
                    </div>
@@ -112,7 +112,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ seed, setSeed, weights, setWe
                  
                  <div className="md:col-span-2 text-center mt-2">
                    <button 
-                     onClick={() => setWeights(DEFAULT_BIOME_WEIGHTS)}
+                     onClick={() => setWeights(DEFAULT_TERRAIN_WEIGHTS)}
                      className="text-[10px] text-slate-500 hover:text-white underline"
                    >
                      Resetar para Padrão
@@ -132,7 +132,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ seed, setSeed, weights, setWe
         </div>
         
         <div className="text-slate-600 text-xs font-mono">
-          v1.1.0 &bull; Scale: 500m/hex
+          v1.2.0 &bull; Scale: 500m/hex &bull; Educational Edition
         </div>
       </div>
     </div>
