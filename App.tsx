@@ -3,8 +3,9 @@ import HexCanvas from './components/HexCanvas';
 import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
 import Dock from './components/Dock';
-import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED } from './constants';
-import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources } from './types';
+import MinimapModal from './components/MinimapModal';
+import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED, DEFAULT_BIOME_WEIGHTS } from './constants';
+import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, BiomeWeights } from './types';
 import { generateRandomCoordinate, getElevation, getHexResources, getBiome } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
 
@@ -14,22 +15,32 @@ const easeInOutCubic = (t: number): number => {
 };
 
 const App: React.FC = () => {
-  // Screen Dimensions
-  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  // Screen Dimensions - Initialize with integer values
+  const [dimensions, setDimensions] = useState({ 
+    width: Math.ceil(window.innerWidth), 
+    height: Math.ceil(window.innerHeight) 
+  });
 
   // Game State
   const [hasStarted, setHasStarted] = useState(false);
+  
+  // Settings State
   const [settings, setSettings] = useState<MapSettings>({
     hexSize: DEFAULT_HEX_SIZE,
     renderRadius: DEFAULT_RENDER_RADIUS,
-    seed: DEFAULT_SEED
+    seed: DEFAULT_SEED,
+    biomeWeights: DEFAULT_BIOME_WEIGHTS
   });
+
   const [language, setLanguage] = useState<Language>('pt');
 
   const [playerPos, setPlayerPos] = useState<HexCoordinate>({ q: 0, r: 0 });
   const [spawnPos, setSpawnPos] = useState<HexCoordinate>({ q: 0, r: 0 });
   const [metersTraveled, setMetersTraveled] = useState(0);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
+  
+  // Bounds Tracking
+  const [exploredBounds, setExploredBounds] = useState<ExploredBounds>({ minQ: 0, maxQ: 0, minR: 0, maxR: 0 });
   
   // Resource State
   const [currentResources, setCurrentResources] = useState<HexResources>({
@@ -46,6 +57,7 @@ const App: React.FC = () => {
   
   // UI Selection State
   const [selectedMarker, setSelectedMarker] = useState<SavedLocation | null>(null);
+  const [isMinimapOpen, setIsMinimapOpen] = useState(false);
 
   // Input State
   const pressedKeys = useRef<Set<string>>(new Set());
@@ -80,18 +92,20 @@ const App: React.FC = () => {
   }, []);
 
   // Function to save data to LocalStorage
-  const saveToStorage = useCallback((seed: string, pos: HexCoordinate, spawn: HexCoordinate, locations: SavedLocation[]) => {
-    const key = getStorageKey(seed);
-    const elevation = getElevation(pos.q, pos.r, seed);
+  const saveToStorage = useCallback((currentSettings: MapSettings, pos: HexCoordinate, spawn: HexCoordinate, locations: SavedLocation[], bounds: ExploredBounds) => {
+    const key = getStorageKey(currentSettings.seed);
+    const elevation = getElevation(pos.q, pos.r, currentSettings);
     
     const data: MapSaveData = {
-      seed: seed,
+      seed: currentSettings.seed,
       x: pos.q,
       y: pos.r,
       altitude: elevation,
       saved_positions: locations,
       start_x: spawn.q,
-      start_y: spawn.r
+      start_y: spawn.r,
+      explored_bounds: bounds,
+      biome_weights: currentSettings.biomeWeights
     };
 
     localStorage.setItem(key, JSON.stringify(data));
@@ -106,46 +120,84 @@ const App: React.FC = () => {
     if (saveData) {
       // Load existing session for this seed
       setPlayerPos({ q: saveData.x, r: saveData.y });
-      // Restore spawn point if available, otherwise default to current pos (for old saves)
       setSpawnPos({ 
         q: saveData.start_x !== undefined ? saveData.start_x : saveData.x, 
         r: saveData.start_y !== undefined ? saveData.start_y : saveData.y 
       });
       setSavedLocations(saveData.saved_positions || []);
+      
+      // Load Bounds
+      if (saveData.explored_bounds) {
+        setExploredBounds(saveData.explored_bounds);
+      } else {
+        setExploredBounds({
+          minQ: saveData.x, maxQ: saveData.x, minR: saveData.y, maxR: saveData.y
+        });
+      }
+
+      // If existing save has specific weights, load them to preserve map consistency
+      if (saveData.biome_weights) {
+        setSettings(prev => ({ ...prev, biomeWeights: saveData.biome_weights! }));
+      }
+
     } else {
-      // New Game - Randomize Start Position
+      // New Game
       const initialPos = generateRandomCoordinate();
       setPlayerPos(initialPos);
       setSpawnPos(initialPos);
       setSavedLocations([]);
       setMetersTraveled(0);
       
+      const initialBounds = {
+        minQ: initialPos.q, maxQ: initialPos.q, minR: initialPos.r, maxR: initialPos.r
+      };
+      setExploredBounds(initialBounds);
+      
       // Create initial save file
-      saveToStorage(settings.seed, initialPos, initialPos, []);
+      saveToStorage(settings, initialPos, initialPos, [], initialBounds);
     }
     
     setHasStarted(true);
   };
 
-  // Auto-save whenever player moves or saves a location
-  // Skip auto-save during teleport animation to avoid thrashing storage
+  // Update bounds whenever player moves
+  useEffect(() => {
+    if (!hasStarted) return;
+    
+    setExploredBounds(prev => {
+      const newBounds = {
+        minQ: Math.min(prev.minQ, playerPos.q),
+        maxQ: Math.max(prev.maxQ, playerPos.q),
+        minR: Math.min(prev.minR, playerPos.r),
+        maxR: Math.max(prev.maxR, playerPos.r)
+      };
+      
+      // Only update state if something changed
+      if (newBounds.minQ !== prev.minQ || newBounds.maxQ !== prev.maxQ || 
+          newBounds.minR !== prev.minR || newBounds.maxR !== prev.maxR) {
+        return newBounds;
+      }
+      return prev;
+    });
+  }, [playerPos, hasStarted]);
+
+  // Auto-save
   useEffect(() => {
     if (hasStarted && !isTeleporting) {
-      saveToStorage(settings.seed, playerPos, spawnPos, savedLocations);
+      saveToStorage(settings, playerPos, spawnPos, savedLocations, exploredBounds);
     }
-  }, [playerPos, spawnPos, savedLocations, hasStarted, settings.seed, saveToStorage, isTeleporting]);
+  }, [playerPos, spawnPos, savedLocations, exploredBounds, hasStarted, settings, saveToStorage, isTeleporting]);
 
 
   // --- RESOURCE CALCULATION LOGIC ---
   useEffect(() => {
     if (!hasStarted) return;
     
-    const currentBiome = getBiome(playerPos.q, playerPos.r, settings.seed);
+    const currentBiome = getBiome(playerPos.q, playerPos.r, settings);
     const resources = getHexResources(playerPos.q, playerPos.r, settings.seed, currentBiome);
     setCurrentResources(resources);
 
     // Update Dock Items
-    // Collect all valid resource items found in this hex
     const foundItems: LocalizedName[] = [
       ...resources.rareStones,
       ...resources.animals,
@@ -156,19 +208,15 @@ const App: React.FC = () => {
     if (foundItems.length > 0) {
       setRecentItems(prev => {
         let newHistory = [...prev];
-        
         foundItems.forEach(item => {
-           // Move to front if exists, or add new
            newHistory = newHistory.filter(h => h.en !== item.en);
            newHistory.unshift(item);
         });
-
-        // Limit to 6
         return newHistory.slice(0, 6);
       });
     }
 
-  }, [playerPos, settings.seed, hasStarted]);
+  }, [playerPos, settings, hasStarted]);
 
 
   // --- EVENT HANDLERS ---
@@ -186,7 +234,6 @@ const App: React.FC = () => {
 
   const handleDeleteLocation = (id: string) => {
     setSavedLocations(prev => prev.filter(loc => loc.id !== id));
-    // If deleted marker was selected, close popup
     if (selectedMarker?.id === id) setSelectedMarker(null);
   };
 
@@ -194,23 +241,20 @@ const App: React.FC = () => {
   const handleTeleport = (loc: SavedLocation) => {
     if (isTeleporting) return;
 
-    setSelectedMarker(null); // Close popup
+    setSelectedMarker(null);
+    setIsMinimapOpen(false);
     
     const startPos = playerPos;
     const endPos = { q: loc.x, r: loc.y };
-    
-    // Calculate distance to determine animation duration
-    // Distances can be large, so we clamp the duration between 1s and 3s
     const dist = hexDistance(startPos, endPos);
     
-    // If we are already there, do nothing
     if (dist < 0.1) return;
 
     setIsTeleporting(true);
 
-    const baseDuration = 1000; // Minimum 1 second
-    const durationPerHex = 10; // +10ms per hex
-    const maxDuration = 3000; // Cap at 3 seconds max
+    const baseDuration = 1000;
+    const durationPerHex = 10;
+    const maxDuration = 3000;
     
     const duration = Math.min(maxDuration, baseDuration + (dist * durationPerHex));
     const startTime = performance.now();
@@ -218,11 +262,8 @@ const App: React.FC = () => {
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Apply easing
       const ease = easeInOutCubic(progress);
 
-      // Interpolate Coordinates
       const currentQ = startPos.q + (endPos.q - startPos.q) * ease;
       const currentR = startPos.r + (endPos.r - startPos.r) * ease;
 
@@ -231,8 +272,7 @@ const App: React.FC = () => {
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        // Finished
-        setPlayerPos(endPos); // Snap to exact target
+        setPlayerPos(endPos); 
         setIsTeleporting(false);
       }
     };
@@ -240,7 +280,6 @@ const App: React.FC = () => {
     animationFrameRef.current = requestAnimationFrame(animate);
   };
 
-  // Clean up animation on unmount
   useEffect(() => {
     return () => cancelAnimationFrame(animationFrameRef.current);
   }, []);
@@ -251,34 +290,30 @@ const App: React.FC = () => {
     }
   };
 
-  // Handle Resize
   useEffect(() => {
     const handleResize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      setDimensions({ 
+        width: Math.ceil(window.innerWidth), 
+        height: Math.ceil(window.innerHeight) 
+      });
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Movement Logic
   const movePlayer = useCallback((dq: number, dr: number) => {
-    if (!hasStarted || isTeleporting) return; // Prevent movement if not started or teleporting
+    if (!hasStarted || isTeleporting) return;
 
-    // Adjust the input vector based on current rotation
     const rotated = rotateMoveVector(dq, dr, rotation);
 
     setPlayerPos(prev => ({
       q: prev.q + rotated.q,
       r: prev.r + rotated.r
     }));
-    // Each hex is now 500 meters
     setMetersTraveled(prev => prev + 500);
-    
-    // Deselect marker if we move
     setSelectedMarker(null);
   }, [hasStarted, rotation, isTeleporting]);
 
-  // Keyboard Controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!hasStarted || isTeleporting) return;
@@ -287,17 +322,20 @@ const App: React.FC = () => {
       const key = e.key;
       pressedKeys.current.add(key);
 
-      // Prevent default scrolling for arrow keys
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
         e.preventDefault();
       }
 
       if (key === 'Escape') {
         setSelectedMarker(null);
+        setIsMinimapOpen(false);
         return;
       }
 
-      // Check Key Combinations
+      if (key.toLowerCase() === 'm') {
+        setIsMinimapOpen(prev => !prev);
+      }
+
       const up = pressedKeys.current.has('ArrowUp');
       const down = pressedKeys.current.has('ArrowDown');
       const left = pressedKeys.current.has('ArrowLeft');
@@ -307,27 +345,23 @@ const App: React.FC = () => {
       let dr = 0;
       let shouldMove = false;
 
-      // Logic: Up/Down only work if Left/Right are also pressed
-      
       if (key === 'ArrowLeft') {
-         if (up) { dq = 0; dr = -1; shouldMove = true; } // Up + Left = NW
-         else if (down) { dq = -1; dr = 1; shouldMove = true; } // Down + Left = SW
-         else { dq = -1; dr = 0; shouldMove = true; } // Left only = W
+         if (up) { dq = 0; dr = -1; shouldMove = true; } 
+         else if (down) { dq = -1; dr = 1; shouldMove = true; } 
+         else { dq = -1; dr = 0; shouldMove = true; } 
       }
       else if (key === 'ArrowRight') {
-         if (up) { dq = 1; dr = -1; shouldMove = true; } // Up + Right = NE
-         else if (down) { dq = 0; dr = 1; shouldMove = true; } // Down + Right = SE
-         else { dq = 1; dr = 0; shouldMove = true; } // Right only = E
+         if (up) { dq = 1; dr = -1; shouldMove = true; } 
+         else if (down) { dq = 0; dr = 1; shouldMove = true; } 
+         else { dq = 1; dr = 0; shouldMove = true; } 
       }
       else if (key === 'ArrowUp') {
-         if (left) { dq = 0; dr = -1; shouldMove = true; } // Up + Left = NW
-         else if (right) { dq = 1; dr = -1; shouldMove = true; } // Up + Right = NE
-         // Up alone does nothing
+         if (left) { dq = 0; dr = -1; shouldMove = true; } 
+         else if (right) { dq = 1; dr = -1; shouldMove = true; } 
       }
       else if (key === 'ArrowDown') {
-         if (left) { dq = -1; dr = 1; shouldMove = true; } // Down + Left = SW
-         else if (right) { dq = 0; dr = 1; shouldMove = true; } // Down + Right = SE
-         // Down alone does nothing
+         if (left) { dq = -1; dr = 1; shouldMove = true; } 
+         else if (right) { dq = 0; dr = 1; shouldMove = true; } 
       }
 
       if (shouldMove) {
@@ -348,7 +382,6 @@ const App: React.FC = () => {
     };
   }, [movePlayer, hasStarted, isTeleporting]);
 
-  // Main Render Flow
   return (
     <div className="relative w-full h-full bg-slate-900 overflow-hidden text-slate-200">
       
@@ -356,6 +389,8 @@ const App: React.FC = () => {
         <LandingPage 
           seed={settings.seed} 
           setSeed={(val) => setSettings(prev => ({ ...prev, seed: val }))}
+          weights={settings.biomeWeights}
+          setWeights={(weights) => setSettings(prev => ({ ...prev, biomeWeights: weights }))}
           onStart={handleStartGame}
         />
       ) : (
@@ -373,7 +408,6 @@ const App: React.FC = () => {
             settings={settings}
             setSettings={setSettings}
             playerPos={playerPos}
-            movePlayer={movePlayer}
             metersTraveled={metersTraveled}
             distanceFromSpawn={distanceFromSpawn}
             rotation={rotation}
@@ -385,11 +419,11 @@ const App: React.FC = () => {
             language={language}
             setLanguage={setLanguage}
             currentResources={currentResources}
+            onOpenMinimap={() => setIsMinimapOpen(true)}
           />
           
           <Dock items={recentItems} language={language} />
 
-          {/* Help Overlay - only shows initially */}
           {metersTraveled === 0 && savedLocations.length === 0 && !isTeleporting && (
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center opacity-70 animate-pulse z-50">
                <h1 className="text-4xl font-bold text-white mb-2 tracking-widest uppercase drop-shadow-lg">Explorar</h1>
@@ -401,7 +435,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* Teleporting State Indicator */}
           {isTeleporting && (
              <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 pointer-events-none z-50">
                 <div className="bg-blue-600/80 backdrop-blur text-white px-4 py-2 rounded-full font-bold shadow-lg animate-bounce border border-blue-400">
@@ -410,7 +443,6 @@ const App: React.FC = () => {
              </div>
           )}
 
-          {/* Marker Details Popup */}
           {selectedMarker && !isTeleporting && (
              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-slate-800/90 backdrop-blur border border-yellow-500/50 p-4 rounded-xl shadow-2xl z-40 min-w-[280px] animate-in fade-in zoom-in duration-200">
                 <div className="flex justify-between items-start mb-2 border-b border-slate-700 pb-2">
@@ -439,6 +471,18 @@ const App: React.FC = () => {
                 </div>
              </div>
           )}
+
+          {isMinimapOpen && (
+            <MinimapModal 
+              seed={settings.seed}
+              bounds={exploredBounds}
+              playerPos={playerPos}
+              onClose={() => setIsMinimapOpen(false)}
+              language={language}
+              settings={settings}
+            />
+          )}
+
         </>
       )}
     </div>

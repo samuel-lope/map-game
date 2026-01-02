@@ -25,10 +25,13 @@ export interface HexData {
   height: number; // 0 to 1
 }
 
+export type BiomeWeights = Record<BiomeType, number>;
+
 export interface MapSettings {
   hexSize: number;
   renderRadius: number;
   seed: string;
+  biomeWeights: BiomeWeights;
 }
 
 export interface SavedLocation {
@@ -39,6 +42,13 @@ export interface SavedLocation {
   timestamp: number;
 }
 
+export interface ExploredBounds {
+  minQ: number;
+  maxQ: number;
+  minR: number;
+  maxR: number;
+}
+
 export interface MapSaveData {
   seed: string;
   x: number; // Current q
@@ -47,6 +57,11 @@ export interface MapSaveData {
   saved_positions: SavedLocation[];
   start_x?: number; // Origin q
   start_y?: number; // Origin r
+  explored_bounds?: ExploredBounds;
+  // We don't strictly save weights to keep seeds shareable, 
+  // but in a full app you might want to save config too.
+  // For this version, we assume seed + config recreates the world.
+  biome_weights?: BiomeWeights; 
 }
 
 export interface LocalizedName {

@@ -15,6 +15,17 @@ interface HexCanvasProps {
   onLocationSelect: (loc: SavedLocation | null) => void;
 }
 
+// Pre-calculate corners for a hexagon of size 1 relative to (0,0)
+// Pointy top angles: -30, 30, 90, 150, 210, 270 (-90)
+const HEX_CORNERS = [0, 1, 2, 3, 4, 5].map(i => {
+  const angle_deg = 60 * i - 30;
+  const angle_rad = Math.PI / 180 * angle_deg;
+  return {
+    x: Math.cos(angle_rad),
+    y: Math.sin(angle_rad)
+  };
+});
+
 const HexCanvas: React.FC<HexCanvasProps> = ({ 
   playerPos, 
   settings, 
@@ -63,8 +74,8 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     ctx.save();
 
-    // 1. Move origin to center of screen
-    ctx.translate(width / 2, height / 2);
+    // 1. Move origin to center of screen. Use Math.floor to ensure integer alignment to prevent blur.
+    ctx.translate(Math.floor(width / 2), Math.floor(height / 2));
 
     // 2. Apply Rotation
     const rad = (rotation * Math.PI) / 180;
@@ -72,6 +83,9 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     // 3. Move world so player is at the new origin (camera center)
     const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
+    // Integer align the world camera position to prevent swimming artifacts
+    // Note: This might cause slightly jerky camera movement if not careful, but looks sharper static.
+    // For smooth movement, we keep float. For "deformed" shape fix, rotation center translation is more key.
     ctx.translate(-centerPix.x, -centerPix.y);
 
     // Get Visible Hexes
@@ -80,7 +94,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     // Draw Hexes
     hexes.forEach(hex => {
-      drawHex(ctx, hex, settings.hexSize, settings.seed, textures);
+      drawHex(ctx, hex, settings.hexSize, settings, textures);
     });
 
     // Draw Saved Location Markers
@@ -133,23 +147,21 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx: CanvasRenderingContext2D, 
     hex: HexCoordinate, 
     size: number, 
-    seed: string, 
+    currentSettings: MapSettings, 
     textureMap: Record<BiomeType, CanvasPattern | string>
 ) => {
     const { x, y } = hexToPixel(hex.q, hex.r, size);
     
+    // Draw using pre-calculated corners to ensure perfect consistent geometry
     ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const angle_deg = 60 * i - 30;
-      const angle_rad = Math.PI / 180 * angle_deg;
-      const px = x + size * Math.cos(angle_rad);
-      const py = y + size * Math.sin(angle_rad);
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+    // Using a loop unroll or standard loop over static array is cleaner
+    ctx.moveTo(x + HEX_CORNERS[0].x * size, y + HEX_CORNERS[0].y * size);
+    for (let i = 1; i < 6; i++) {
+        ctx.lineTo(x + HEX_CORNERS[i].x * size, y + HEX_CORNERS[i].y * size);
     }
     ctx.closePath();
 
-    const biome = getBiome(hex.q, hex.r, seed);
+    const biome = getBiome(hex.q, hex.r, currentSettings);
     
     // Apply Texture
     if (textureMap && textureMap[biome]) {
@@ -246,7 +258,7 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     <canvas 
       ref={canvasRef} 
       onClick={handleClick}
-      style={{ width, height, display: 'block', cursor: 'crosshair' }}
+      style={{ width: `${width}px`, height: `${height}px`, display: 'block', cursor: 'crosshair' }}
     />
   );
 };

@@ -1,10 +1,20 @@
 
-import { BiomeType, BiomeResourceData } from './types';
+import { BiomeType, BiomeResourceData, BiomeWeights } from './types';
 
 // 128-bit Hex Seed (32 chars)
 export const DEFAULT_SEED = "A3726246D353E0C7ADEA4FF766C4D6E7";
 export const DEFAULT_HEX_SIZE = 25; // Pixels
 export const DEFAULT_RENDER_RADIUS = 5; // 5 Hexes * 500m = 2500m
+
+export const DEFAULT_BIOME_WEIGHTS: BiomeWeights = {
+  [BiomeType.DEEP_WATER]: 20,
+  [BiomeType.WATER]: 20,
+  [BiomeType.SAND]: 15,
+  [BiomeType.GRASS]: 25,
+  [BiomeType.FOREST]: 15,
+  [BiomeType.MOUNTAIN]: 4,
+  [BiomeType.SNOW]: 1,
+};
 
 export const BIOME_COLORS: Record<BiomeType, string> = {
   [BiomeType.DEEP_WATER]: '#1e3a8a', // Blue 900
@@ -47,7 +57,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
       { en: "Jellyfish", pt: "Água-viva", image: img("Jellyfish", "E0FFFF") }
     ],
     mineral_resources: [
-      { en: "Oil", pt: "Petróleo", image: img("Oil", "000000") },
+      { en: "Oil", pt: "Petróleo", image: "https://imagedelivery.net/QSzHJ7VhDUrBv1VXnLbazw/048491ea-6fce-4a59-df3f-cf0bba190700/craft512" },
       { en: "Limestone", pt: "Calcário", image: img("Limestone", "DCDCDC") },
       { en: "Manganese Nodules", pt: "Nódulos de Manganês", image: img("Manganese", "696969") }
     ],
@@ -124,7 +134,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
         id: "cactus",
         pt: "Cacto", 
         en: "Cactus",
-        image: img("Cactus", "006400"),
+        image: "http://ue.ia.br/nvop",
         harvestable_materials: [
           { pt: "Extrato de Água", en: "Water Extract" },
           { pt: "Pigmento Verde", en: "Green Pigment" },

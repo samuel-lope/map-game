@@ -6,7 +6,6 @@ interface ControlsProps {
   settings: MapSettings;
   setSettings: (s: MapSettings) => void;
   playerPos: HexCoordinate;
-  movePlayer: (dq: number, dr: number) => void;
   metersTraveled: number;
   distanceFromSpawn: number;
   rotation: number;
@@ -21,13 +20,14 @@ interface ControlsProps {
   setLanguage: (l: Language) => void;
   // New Prop
   currentResources: HexResources;
+  // Minimap
+  onOpenMinimap?: () => void;
 }
 
 const Controls: React.FC<ControlsProps> = ({ 
   settings, 
   setSettings, 
   playerPos, 
-  movePlayer,
   metersTraveled,
   distanceFromSpawn,
   rotation,
@@ -38,11 +38,12 @@ const Controls: React.FC<ControlsProps> = ({
   onTeleport,
   language,
   setLanguage,
-  currentResources
+  currentResources,
+  onOpenMinimap
 }) => {
   
-  const currentBiome = getBiome(playerPos.q, playerPos.r, settings.seed);
-  const elevation = getElevation(playerPos.q, playerPos.r, settings.seed);
+  const currentBiome = getBiome(playerPos.q, playerPos.r, settings);
+  const elevation = getElevation(playerPos.q, playerPos.r, settings);
 
   // --- Local UI State for Modals ---
   const [isSaveModalOpen, setSaveModalOpen] = useState(false);
@@ -132,6 +133,17 @@ const Controls: React.FC<ControlsProps> = ({
              </button>
           </div>
         </div>
+        
+        {/* Map Button */}
+        {onOpenMinimap && (
+          <button
+            onClick={onOpenMinimap}
+            className="w-full bg-slate-700 hover:bg-blue-700 text-white text-xs font-bold py-2 rounded transition-colors shadow-md border border-slate-600 flex items-center justify-center gap-2"
+          >
+            <span>🗺️</span>
+            {language === 'pt' ? 'ABRIR MAPA COMPLETO' : 'OPEN FULL MAP'}
+          </button>
+        )}
 
         {/* Saved Locations Section */}
         <div className="mt-2 border-t border-slate-700 pt-4 flex flex-col gap-3">
@@ -332,26 +344,6 @@ const Controls: React.FC<ControlsProps> = ({
              </div>
            </div>
 
-        </div>
-      </div>
-
-      {/* Bottom Left: D-Pad Controls (for mobile/mouse) - MOVED FROM RIGHT */}
-      <div className="absolute bottom-8 left-8 pointer-events-auto flex flex-col items-center gap-1">
-        <div className="flex gap-1">
-          <button onClick={() => movePlayer(0, -1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-tl-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↖</button>
-          <button onClick={() => movePlayer(1, -1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-tr-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↗</button>
-        </div>
-        <div className="flex gap-1">
-          <button onClick={() => movePlayer(-1, 0)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">←</button>
-          <div className="w-12 h-12 flex items-center justify-center text-slate-500 font-bold bg-slate-800 rounded-full">P</div>
-          <button onClick={() => movePlayer(1, 0)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">→</button>
-        </div>
-        <div className="flex gap-1">
-          <button onClick={() => movePlayer(-1, 1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-bl-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↙</button>
-          <button onClick={() => movePlayer(0, 1)} className="w-12 h-12 bg-slate-700 hover:bg-slate-600 rounded-br-xl flex items-center justify-center text-white font-bold active:scale-95 shadow-lg border-b-4 border-slate-800 transition-all">↘</button>
-        </div>
-        <div className="mt-2 text-xs text-slate-500 font-mono bg-slate-900/50 px-2 py-1 rounded text-center">
-           ARROWS + COMBOS
         </div>
       </div>
 
