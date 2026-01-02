@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { PERIODIC_TABLE_DATA } from '../constants';
 import { Language, PeriodicElement, PeriodicCategory, PeriodicTableData } from '../types';
 
@@ -7,6 +7,9 @@ interface PeriodicTableModalProps {
   onClose: () => void;
   language: Language;
 }
+
+// Extend PeriodicElement to include the flattened category name for display purposes
+type PeriodicElementDisplay = PeriodicElement & { categoryNameEn: string };
 
 // Helper to determine grid position based on Atomic Number
 const getElementPosition = (n: number): { row: number; col: number } => {
@@ -47,10 +50,34 @@ const getElementPosition = (n: number): { row: number; col: number } => {
 
 const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({ onClose, language }) => {
   const [tableData, setTableData] = useState(PERIODIC_TABLE_DATA.tabela_periodica);
-  const [selectedElement, setSelectedElement] = useState<PeriodicElement | null>(null);
+  const [selectedElement, setSelectedElement] = useState<PeriodicElementDisplay | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const langKey = language === 'pt' ? 'pt_BR' : 'en_US';
+
+  // Fetch data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('https://pub-76bc798090bb4086860a2e3286680ad5.r2.dev/periodic-table/tabela_periodica.json');
+        if (!response.ok) throw new Error("Failed to load data");
+        
+        const json = await response.json();
+        
+        if (json.tabela_periodica) {
+          setTableData(json.tabela_periodica);
+        }
+      } catch (error) {
+        console.error("Error fetching periodic table data:", error);
+        // Fallback or error handling could go here
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   // Helper to get category color
   const getCategoryColor = (catNameEn: string) => {
@@ -69,9 +96,24 @@ const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({ onClose, langua
     return "bg-slate-700 border-slate-600 text-slate-300";
   };
 
+  const getBorderColor = (catNameEn: string) => {
+     const bgClass = getCategoryColor(catNameEn);
+     if (bgClass.includes("red")) return "border-red-500";
+     if (bgClass.includes("orange")) return "border-orange-500";
+     if (bgClass.includes("blue")) return "border-blue-500";
+     if (bgClass.includes("pink")) return "border-pink-500";
+     if (bgClass.includes("purple")) return "border-purple-500";
+     if (bgClass.includes("teal")) return "border-teal-500";
+     if (bgClass.includes("green")) return "border-green-500";
+     if (bgClass.includes("cyan")) return "border-cyan-500";
+     if (bgClass.includes("yellow")) return "border-yellow-500";
+     if (bgClass.includes("indigo")) return "border-indigo-500";
+     return "border-slate-500";
+  }
+
   // Flatten elements for the grid view
   const allElements = useMemo(() => {
-    const list: (PeriodicElement & { categoryNameEn: string })[] = [];
+    const list: PeriodicElementDisplay[] = [];
     tableData.categorias.forEach(cat => {
       cat.elementos.forEach(el => {
         list.push({ ...el, categoryNameEn: cat.nome.en_US });
@@ -162,8 +204,17 @@ const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({ onClose, langua
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto p-4 md:p-8 flex flex-col items-center justify-start bg-slate-950">
+      <div className="flex-1 overflow-auto p-4 md:p-8 flex flex-col items-center justify-start bg-slate-950 relative">
         
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 z-20">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-blue-400 text-sm font-bold tracking-widest animate-pulse">LOADING DATA...</span>
+            </div>
+          </div>
+        )}
+
         {/* Periodic Table Grid */}
         <div 
           className="grid gap-1 md:gap-2 auto-rows-[minmax(60px,1fr)] w-full max-w-[1400px]"
@@ -203,125 +254,181 @@ const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({ onClose, langua
         </div>
 
         {/* Legend */}
-        <div className="mt-8 flex flex-wrap justify-center gap-4 max-w-5xl">
-           {tableData.categorias.map((cat, idx) => (
-             <div key={idx} className="flex items-center gap-2">
-                <div className={`w-4 h-4 rounded border ${getCategoryColor(cat.nome.en_US)}`}></div>
-                <span className="text-xs text-slate-400 uppercase font-bold">{cat.nome[langKey]}</span>
-             </div>
-           ))}
-        </div>
+        {!isLoading && (
+          <div className="mt-8 flex flex-wrap justify-center gap-4 max-w-5xl">
+             {tableData.categorias.map((cat, idx) => (
+               <div key={idx} className="flex items-center gap-2">
+                  <div className={`w-4 h-4 rounded border ${getCategoryColor(cat.nome.en_US)}`}></div>
+                  <span className="text-xs text-slate-400 uppercase font-bold">{cat.nome[langKey]}</span>
+               </div>
+             ))}
+          </div>
+        )}
 
       </div>
 
       {/* --- ELEMENT DETAILS MODAL (Overlay) --- */}
       {selectedElement && (
-        <div className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div 
-            className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 relative"
+            className="bg-slate-900 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header/Top */}
-            <div className="relative p-6 flex flex-col items-center border-b border-slate-800 bg-slate-950/50">
-               <button 
+            <button 
                  onClick={() => setSelectedElement(null)}
-                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-               >✕</button>
+                 className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-600"
+            >✕</button>
 
-               <div className="flex items-center gap-6">
-                  <div className={`w-24 h-24 flex flex-col items-center justify-center rounded-xl border-2 shadow-[0_0_30px_rgba(255,255,255,0.1)] ${getCategoryColor('Unknown') /* Dynamic would be better but requires passing category name */}`}>
-                      <span className="text-xs self-start ml-2 mb-1 opacity-70">{selectedElement.numero_atomico}</span>
-                      <span className="text-4xl font-bold">{selectedElement.simbolo}</span>
-                  </div>
-                  <div>
-                      <h2 className="text-3xl font-bold text-white">{selectedElement.nome[langKey]}</h2>
-                      <p className="text-blue-400 font-mono text-sm mt-1">{selectedElement.configuracao_eletronica}</p>
-                      <span className="inline-block mt-2 bg-slate-800 px-3 py-1 rounded-full text-xs text-slate-300 uppercase tracking-widest border border-slate-700">
-                        {selectedElement.estado_fisico_padrao}
-                      </span>
-                  </div>
-               </div>
-            </div>
+            {/* Horizontal Layout for Widescreen */}
+            <div className="flex flex-col md:grid md:grid-cols-[380px_1fr] h-full overflow-hidden">
+                
+                {/* LEFT: VISUALS (Atom Model) */}
+                <div className="relative bg-slate-950/50 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col items-center justify-center p-8 overflow-hidden">
+                    
+                    {/* Background Glow */}
+                    <div className={`absolute inset-0 opacity-10 bg-gradient-to-br from-transparent to-current ${getCategoryColor(selectedElement.categoryNameEn).split(' ')[0]}`}></div>
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto max-h-[60vh] scrollbar-thin scrollbar-thumb-slate-700">
-               
-               {/* Electron Shells Visualization */}
-               <div className="mb-6 flex flex-col items-center">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">
-                    {language === 'pt' ? 'Camadas Eletrônicas' : 'Electron Shells'}
-                  </h4>
-                  <div className="relative w-48 h-48 bg-slate-950 rounded-full border border-slate-800 flex items-center justify-center shadow-inner">
-                    <div className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_10px_white] z-10"></div>
-                    {selectedElement.camadas.map((electrons, i) => {
-                      const sizePercent = 20 + ((i + 1) / selectedElement.camadas.length) * 80;
-                      return (
-                        <div 
-                          key={i}
-                          className="absolute rounded-full border border-blue-500/30 flex items-center justify-center animate-[spin_slow_linear_infinite]"
-                          style={{ 
-                            width: `${sizePercent}%`, 
-                            height: `${sizePercent}%`,
-                            animationDuration: `${8 + i * 4}s`,
-                            animationDirection: i % 2 === 0 ? 'normal' : 'reverse'
-                          }}
-                        >
-                          <div className="absolute top-0 w-2 h-2 bg-blue-400 rounded-full shadow-[0_0_5px_cyan]"></div>
+                    {/* ATOMIC MODEL ANIMATION */}
+                    <div className="relative w-64 h-64 mb-8 flex items-center justify-center">
+                        {/* Nucleus */}
+                        <div className={`absolute w-6 h-6 rounded-full shadow-[0_0_20px_currentColor] z-10 ${getCategoryColor(selectedElement.categoryNameEn).split(' ')[0]} animate-pulse`}></div>
+                        
+                        {/* Electron Shells (Single rendering logic) */}
+                        {selectedElement.camadas.map((electrons, i) => {
+                            const sizePercent = 20 + ((i + 1) / selectedElement.camadas.length) * 80; // 20% to 100% of 256px
+                            const radiusPx = (256 * (sizePercent/100)) / 2;
+                            const duration = 6 + i * 4;
+                            const direction = i % 2 === 0 ? 'normal' : 'reverse';
+
+                            return (
+                                <div 
+                                    key={`shell-${i}`}
+                                    className="absolute rounded-full border border-blue-500/20 flex items-center justify-center animate-[spin_linear_infinite]"
+                                    style={{ 
+                                        width: `${sizePercent}%`, 
+                                        height: `${sizePercent}%`,
+                                        animationDuration: `${duration}s`,
+                                        animationDirection: direction
+                                    }}
+                                >
+                                    {Array.from({ length: electrons }).map((_, eIdx) => (
+                                        <div
+                                            key={eIdx}
+                                            className="absolute w-2 h-2 bg-cyan-400 rounded-full shadow-[0_0_5px_cyan]"
+                                            style={{
+                                                transform: `rotate(${(360 / electrons) * eIdx}deg) translate(${radiusPx}px) rotate(-${(360 / electrons) * eIdx}deg)` 
+                                            }}
+                                        ></div>
+                                    ))}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Identity Block */}
+                    <div className="flex flex-col items-center z-10">
+                        <div className={`text-6xl font-bold text-white mb-2 drop-shadow-xl ${getCategoryColor(selectedElement.categoryNameEn).split(' ')[2]}`}>
+                            {selectedElement.simbolo}
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-2 mt-3 font-mono text-sm text-blue-300">
-                    {selectedElement.camadas.map((n, i) => (
-                        <span key={i} className="bg-slate-800 px-2 rounded border border-slate-700">{n}</span>
-                    ))}
-                  </div>
-               </div>
+                        <div className="text-3xl font-bold text-slate-200 text-center leading-none mb-1">
+                            {selectedElement.nome[langKey]}
+                        </div>
+                        <div className="text-slate-500 font-mono font-bold text-lg mb-4">
+                            {selectedElement.numero_atomico}
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs uppercase font-bold tracking-widest border bg-slate-900/80 ${getBorderColor(selectedElement.categoryNameEn)} text-slate-300`}>
+                            {selectedElement.categoryNameEn}
+                        </span>
+                    </div>
+                </div>
 
-               {/* Data Grid */}
-               <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                    <div className="text-[10px] text-slate-500 uppercase font-bold">Massa Atômica</div>
-                    <div className="text-lg font-mono text-white">{selectedElement.massa_atomica} u</div>
-                  </div>
-                  <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                    <div className="text-[10px] text-slate-500 uppercase font-bold">Raio Atômico</div>
-                    <div className="text-lg font-mono text-white">{selectedElement.estrutura_atomica.raio_atomico_pm || '-'} pm</div>
-                  </div>
-                  <div className="bg-slate-800/50 p-3 rounded border border-slate-700">
-                    <div className="text-[10px] text-slate-500 uppercase font-bold">Eletronegatividade</div>
-                    <div className="text-lg font-mono text-emerald-400">{selectedElement.estrutura_atomica.eletronegatividade_pauling || 'N/A'}</div>
-                  </div>
-                  <div className="bg-slate-800/50 p-3 rounded border border-slate-700 flex gap-4">
-                     <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold">P</div>
-                        <div className="text-white font-mono">{selectedElement.estrutura_atomica.protons}</div>
-                     </div>
-                     <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold">N</div>
-                        <div className="text-slate-400 font-mono">{selectedElement.estrutura_atomica.neutrons}</div>
-                     </div>
-                     <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-bold">E</div>
-                        <div className="text-blue-300 font-mono">{selectedElement.estrutura_atomica.eletrons}</div>
-                     </div>
-                  </div>
-               </div>
+                {/* RIGHT: DATA */}
+                <div className="flex flex-col p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 bg-slate-900">
+                    
+                    {/* Top Stats Row */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                        <div className="bg-slate-800 p-3 rounded border border-slate-700 overflow-hidden">
+                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 truncate">Massa Atômica</div>
+                            <div className="text-white font-mono text-sm md:text-base truncate" title={`${selectedElement.massa_atomica} u`}>
+                                {selectedElement.massa_atomica} <span className="text-xs text-slate-500">u</span>
+                            </div>
+                        </div>
+                        <div className="bg-slate-800 p-3 rounded border border-slate-700 overflow-hidden">
+                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 truncate">Estado Físico</div>
+                            <div className="text-white text-sm md:text-base truncate" title={selectedElement.estado_fisico_padrao}>
+                                {selectedElement.estado_fisico_padrao}
+                            </div>
+                        </div>
+                        <div className="bg-slate-800 p-3 rounded border border-slate-700 overflow-hidden">
+                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 truncate">Eletronegatividade</div>
+                            <div className="text-emerald-400 font-mono text-sm md:text-base truncate">
+                                {selectedElement.estrutura_atomica.eletronegatividade_pauling || 'N/A'}
+                            </div>
+                        </div>
+                        <div className="bg-slate-800 p-3 rounded border border-slate-700 overflow-hidden">
+                            <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 truncate">Raio Atômico</div>
+                            <div className="text-blue-400 font-mono text-sm md:text-base truncate">
+                                {selectedElement.estrutura_atomica.raio_atomico_pm || '-'} <span className="text-xs text-slate-500">pm</span>
+                            </div>
+                        </div>
+                    </div>
 
-               {/* Sources List */}
-               <div>
-                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 tracking-widest border-b border-slate-800 pb-1">
-                    {language === 'pt' ? 'Onde Encontrar' : 'Where to Find'}
-                  </h4>
-                  <ul className="grid grid-cols-1 gap-1">
-                    {selectedElement.fontes_naturais[langKey].map((source, i) => (
-                      <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                        <span className="text-blue-500 mt-1">▸</span> {source}
-                      </li>
-                    ))}
-                  </ul>
-               </div>
+                    {/* Electronic Config */}
+                    <div className="mb-8">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-widest border-b border-slate-800 pb-1">
+                            {language === 'pt' ? 'Estrutura Eletrônica' : 'Electronic Structure'}
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="font-mono text-2xl text-yellow-400 bg-slate-950/50 px-4 py-2 rounded border border-yellow-900/30">
+                                {selectedElement.configuracao_eletronica}
+                            </div>
+                            <div className="flex gap-1">
+                                {selectedElement.camadas.map((n, i) => (
+                                    <div key={i} className="flex flex-col items-center">
+                                        <div className="w-8 h-8 flex items-center justify-center bg-slate-800 rounded border border-slate-700 text-blue-300 font-mono font-bold text-sm">
+                                            {n}
+                                        </div>
+                                        <span className="text-[9px] text-slate-600 mt-1">K{i+1}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
 
+                    {/* Particles */}
+                    <div className="grid grid-cols-3 gap-4 mb-8">
+                         <div className="bg-slate-800/50 p-4 rounded border border-slate-700 flex flex-col items-center">
+                            <span className="text-2xl mb-1">🔴</span>
+                            <div className="text-2xl font-bold text-white">{selectedElement.estrutura_atomica.protons}</div>
+                            <div className="text-[10px] text-slate-500 uppercase font-bold">Prótons</div>
+                         </div>
+                         <div className="bg-slate-800/50 p-4 rounded border border-slate-700 flex flex-col items-center">
+                            <span className="text-2xl mb-1">⚪</span>
+                            <div className="text-2xl font-bold text-slate-300">{selectedElement.estrutura_atomica.neutrons}</div>
+                            <div className="text-[10px] text-slate-500 uppercase font-bold">Nêutrons</div>
+                         </div>
+                         <div className="bg-slate-800/50 p-4 rounded border border-slate-700 flex flex-col items-center">
+                            <span className="text-2xl mb-1">🔵</span>
+                            <div className="text-2xl font-bold text-blue-300">{selectedElement.estrutura_atomica.eletrons}</div>
+                            <div className="text-[10px] text-slate-500 uppercase font-bold">Elétrons</div>
+                         </div>
+                    </div>
+
+                    {/* Sources */}
+                    <div className="flex-1">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-widest border-b border-slate-800 pb-1">
+                            {language === 'pt' ? 'Fontes Naturais' : 'Natural Sources'}
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                            {selectedElement.fontes_naturais[langKey].map((source, i) => (
+                                <span key={i} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm text-slate-300 border border-slate-700 transition-colors">
+                                    {source}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                </div>
             </div>
           </div>
         </div>
