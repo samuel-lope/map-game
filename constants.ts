@@ -1,5 +1,5 @@
 
-import { BiomeType, BiomeResourceData, BiomeWeights } from './types';
+import { BiomeType, BiomeResourceData, BiomeWeights, CraftingRecipe, CraftingCategory } from './types';
 
 // 128-bit Hex Seed (32 chars)
 export const DEFAULT_SEED = "A3726246D353E0C7ADEA4FF766C4D6E7";
@@ -360,7 +360,7 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
     ],
     rare_stones: [
       { en: "Diamond", pt: "Diamante", image: img("Diamond", "E0FFFF") },
-      { en: "Opal", pt: "Opala", image: img("Opal", "FFFAF0") },
+      { en: "Opal", pt: "Opala", image: img("Opala", "FFFAF0") },
       { en: "Moonstone", pt: "Pedra da Lua", image: img("Moonstone", "F8F8FF") },
       { en: "Celestite", pt: "Celestita", image: img("Celestite", "B0E0E6") }
     ],
@@ -381,3 +381,93 @@ export const BIOME_RESOURCES: Record<BiomeType, BiomeResourceData> = {
     ]
   }
 };
+
+export const CRAFTING_RECIPES: CraftingRecipe[] = [
+  // TOOLS
+  {
+    id: 'stone_axe',
+    category: CraftingCategory.TOOLS,
+    inputs: [
+      { nameEn: 'Sticks', quantity: 2 },
+      { nameEn: 'Granite', quantity: 1 },
+      { nameEn: 'Plant Fiber', quantity: 1 }
+    ],
+    output: { pt: 'Machado de Pedra', en: 'Stone Axe', quantity: 1, image: img('Axe', '708090') }
+  },
+  {
+    id: 'rope',
+    category: CraftingCategory.TOOLS,
+    inputs: [
+      { nameEn: 'Plant Fiber', quantity: 3 }
+    ],
+    output: { pt: 'Corda', en: 'Rope', quantity: 1, image: img('Rope', 'D2B48C') }
+  },
+  {
+    id: 'torch',
+    category: CraftingCategory.TOOLS,
+    inputs: [
+      { nameEn: 'Sticks', quantity: 1 },
+      { nameEn: 'Pine Resin', quantity: 1 }
+    ],
+    output: { pt: 'Tocha', en: 'Torch', quantity: 2, image: img('Torch', 'FFA500') }
+  },
+
+  // WEAPONS
+  {
+    id: 'spear',
+    category: CraftingCategory.WEAPONS,
+    inputs: [
+      { nameEn: 'Sticks', quantity: 2 },
+      { nameEn: 'Obsidian', quantity: 1 }
+    ],
+    output: { pt: 'Lança de Obsidiana', en: 'Obsidian Spear', quantity: 1, image: img('Spear', '000') }
+  },
+  {
+    id: 'bow',
+    category: CraftingCategory.WEAPONS,
+    inputs: [
+      { nameEn: 'Sticks', quantity: 3 },
+      { nameEn: 'Plant Fiber', quantity: 2 }
+    ],
+    output: { pt: 'Arco Primitivo', en: 'Primitive Bow', quantity: 1, image: img('Bow', '8B4513') }
+  },
+
+  // CHEMISTRY
+  {
+    id: 'health_potion',
+    category: CraftingCategory.CHEMISTRY,
+    inputs: [
+      { nameEn: 'Medicinal Roots', quantity: 1 },
+      { nameEn: 'Water Extract', quantity: 1 }
+    ],
+    output: { pt: 'Poção de Vida Menor', en: 'Minor Health Potion', quantity: 1, image: img('Health Potion', 'FF0000') }
+  },
+  {
+    id: 'glass',
+    category: CraftingCategory.CHEMISTRY,
+    inputs: [
+      { nameEn: 'Sand', quantity: 2 },
+      { nameEn: 'Coal', quantity: 1 } // Fuel for smelting logic simplified
+    ],
+    output: { pt: 'Vidro', en: 'Glass', quantity: 1, image: img('Glass', 'ADD8E6') }
+  },
+  {
+    id: 'gunpowder',
+    category: CraftingCategory.CHEMISTRY,
+    inputs: [
+      { nameEn: 'Saltpeter', quantity: 1 },
+      { nameEn: 'Charcoal', quantity: 1 }
+    ],
+    output: { pt: 'Pólvora', en: 'Gunpowder', quantity: 2, image: img('Gunpowder', '696969') }
+  },
+
+  // MISC
+  {
+    id: 'planks',
+    category: CraftingCategory.RECIPES,
+    inputs: [
+      { nameEn: 'Oak', quantity: 1 }
+    ],
+    output: { pt: 'Tábuas de Carvalho', en: 'Oak Planks', quantity: 4, image: img('Planks', 'DEB887') }
+  }
+];
