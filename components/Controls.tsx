@@ -79,6 +79,7 @@ const Controls: React.FC<ControlsProps> = ({
   };
 
   const isEmpty = 
+    currentResources.droppedItems.length === 0 &&
     currentResources.vegetation.length === 0 &&
     currentResources.animals.length === 0 &&
     currentResources.minerals.length === 0 &&
@@ -165,7 +166,7 @@ const Controls: React.FC<ControlsProps> = ({
                 <div key={loc.id} className="bg-slate-800 border border-slate-700 rounded p-2 flex justify-between items-center group">
                   <div className="flex flex-col overflow-hidden max-w-[120px]">
                     <span className="text-xs font-bold text-slate-200 truncate" title={loc.name}>{loc.name}</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Q:{loc.x} R:{loc.y}</span>
+                    <span className="text-xs text-slate-500 font-mono">Q:{loc.x} R:{loc.y}</span>
                   </div>
                   <div className="flex gap-1">
                     <button 
@@ -282,11 +283,33 @@ const Controls: React.FC<ControlsProps> = ({
 
            {/* Resources Section - MULTIPLE ITEMS */}
            <div className="mt-3 pt-2 border-t border-slate-700">
-             <span className="text-xs uppercase text-slate-500 block mb-2">Findings</span>
+             <div className="flex justify-between items-center mb-2">
+                <span className="text-xs uppercase text-slate-500">Findings</span>
+                <span className="text-[10px] font-bold text-blue-400 bg-blue-900/30 px-1 py-0.5 rounded border border-blue-900/50 animate-pulse">
+                    {language === 'pt' ? 'PRESS [C]' : 'PRESS [C]'}
+                </span>
+             </div>
+
              <div className="flex flex-col gap-3">
                 
                 {isEmpty && (
                   <span className="text-slate-600 text-xs italic">{language === 'pt' ? 'Nada encontrado.' : 'Nothing found.'}</span>
+                )}
+
+                {/* Dropped Items (ITEMS NO CHÃO) */}
+                {currentResources.droppedItems.length > 0 && (
+                  <div className="flex flex-col gap-1 mb-2">
+                     <span className="text-xs text-blue-400 font-bold uppercase tracking-wide">
+                        {language === 'pt' ? 'Itens no Chão' : 'Dropped Items'}
+                     </span>
+                     {currentResources.droppedItems.map((item, i) => (
+                       <div key={`drop-${i}`} className="flex items-center gap-2 pl-1 bg-slate-800/50 rounded p-1 border border-blue-900/30">
+                         <span className="text-sm">📦</span>
+                         <span className="text-blue-200 text-xs font-semibold truncate">{item[language]}</span>
+                         {item.quantity > 1 && <span className="text-[10px] text-slate-400 font-mono">x{item.quantity}</span>}
+                       </div>
+                     ))}
+                  </div>
                 )}
 
                 {/* Vegetation */}

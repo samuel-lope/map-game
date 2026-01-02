@@ -102,4 +102,19 @@ export interface HexResources {
   droppedItems: InventoryItem[]; // Items dropped by player
 }
 
+export enum CraftingCategory {
+  RECIPES = 'RECEITAS',
+  CHEMISTRY = 'QUÍMICA',
+  TOOLS = 'UTENSÍLIOS',
+  WEAPONS = 'ARMAS',
+  MISC = 'OUTROS'
+}
+
+export interface CraftingRecipe {
+  id: string;
+  category: CraftingCategory;
+  inputs: { nameEn: string; quantity: number }[]; // Match by English name for stability
+  output: LocalizedName & { quantity: number };
+}
+
 export type Language = 'pt' | 'en';

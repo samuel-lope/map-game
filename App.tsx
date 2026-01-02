@@ -4,7 +4,7 @@ import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
 import Dock from './components/Dock';
 import MinimapModal from './components/MinimapModal';
-import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED, DEFAULT_BIOME_WEIGHTS } from './constants';
+import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED, DEFAULT_BIOME_WEIGHTS, CRAFTING_RECIPES } from './constants';
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, InventoryContainer, InventoryItem } from './types';
 import { generateRandomCoordinate, getElevation, getHexResources, getBiome } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
@@ -56,6 +56,9 @@ const App: React.FC = () => {
   // Looting Interaction State
   const [clickedHex, setClickedHex] = useState<HexCoordinate | null>(null);
   const [clickedHexResources, setClickedHexResources] = useState<HexResources | null>(null);
+
+  // Crafting State (6 Slots)
+  const [craftingSlots, setCraftingSlots] = useState<(InventoryItem | null)[]>(Array(6).fill(null));
 
   // Bounds Tracking
   const [exploredBounds, setExploredBounds] = useState<ExploredBounds>({ minQ: 0, maxQ: 0, minR: 0, maxR: 0 });
@@ -246,24 +249,23 @@ const App: React.FC = () => {
   // --- EVENT HANDLERS ---
 
   const handleHexClick = (hex: HexCoordinate) => {
-    // 1. Calculate resources for this hex
-    const biome = getBiome(hex.q, hex.r, settings);
-    const resources = getHexResources(hex.q, hex.r, settings.seed, biome);
-    
-    // 2. Fetch dropped items
-    const key = `${hex.q},${hex.r}`;
-    const groundItems = droppedItems[key] || [];
+    // UPDATED LOGIC: Clicking map only selects markers or closes UI. 
+    // It does NOT open the loot menu anymore.
 
-    setClickedHex(hex);
-    setClickedHexResources({ ...resources, droppedItems: groundItems });
-
-    // 3. Check if it's a saved location for teleport/delete purposes (Legacy feature maintained)
+    // 1. Check if it's a saved location for teleport/delete purposes
     const found = savedLocations.find(loc => loc.x === hex.q && loc.y === hex.r);
     setSelectedMarker(found || null);
+
+    // 2. If clicking anywhere else, close the loot menu if open
+    if (clickedHex && (clickedHex.q !== hex.q || clickedHex.r !== hex.r)) {
+       setClickedHex(null);
+       // We do NOT reset crafting slots when closing Loot menu anymore, 
+       // because crafting is now in the Dock.
+    }
   };
 
-  // Handle collecting items (from nature or ground)
-  const handleCollectItem = (item: LocalizedName | InventoryItem, source: 'nature' | 'ground', hex?: HexCoordinate) => {
+  // Helper to add item to inventory
+  const addToInventory = (item: InventoryItem, source: 'nature' | 'ground' | 'crafting', hex?: HexCoordinate) => {
     // Find first empty slot in the inventory (across all containers)
     let targetContainerIdx = -1;
     let targetSlotIdx = -1;
@@ -278,19 +280,12 @@ const App: React.FC = () => {
     }
 
     if (targetContainerIdx !== -1 && targetSlotIdx !== -1) {
-        // Create the inventory item
-        const newItem: InventoryItem = {
-            ...item,
-            uuid: (item as InventoryItem).uuid || crypto.randomUUID(), // Preserve UUID if exists, else new
-            quantity: (item as InventoryItem).quantity || 1
-        };
-
         const newInventory = [...inventory];
         newInventory[targetContainerIdx] = {
             ...newInventory[targetContainerIdx],
             slots: [...newInventory[targetContainerIdx].slots]
         };
-        newInventory[targetContainerIdx].slots[targetSlotIdx] = newItem;
+        newInventory[targetContainerIdx].slots[targetSlotIdx] = item;
 
         setInventory(newInventory);
 
@@ -299,7 +294,7 @@ const App: React.FC = () => {
             const key = `${hex.q},${hex.r}`;
             setDroppedItems(prev => {
                 const current = prev[key] || [];
-                const updated = current.filter(i => i.uuid !== (item as InventoryItem).uuid);
+                const updated = current.filter(i => i.uuid !== item.uuid);
                 
                 // Update the Loot Menu View immediately
                 if (clickedHex && clickedHex.q === hex.q && clickedHex.r === hex.r && clickedHexResources) {
@@ -320,6 +315,102 @@ const App: React.FC = () => {
         alert(language === 'pt' ? 'Inventário Cheio!' : 'Inventory Full!');
     }
   };
+
+  const handleCollectItem = (item: LocalizedName | InventoryItem, source: 'nature' | 'ground', hex?: HexCoordinate) => {
+      const newItem: InventoryItem = {
+          ...item,
+          uuid: (item as InventoryItem).uuid || crypto.randomUUID(),
+          quantity: (item as InventoryItem).quantity || 1
+      };
+      addToInventory(newItem, source, hex);
+  };
+
+  // --- CRAFTING LOGIC ---
+
+  const handleAddToCrafting = (containerId: number, slotIndex: number) => {
+    const container = inventory.find(c => c.id === containerId);
+    if (!container) return;
+    const item = container.slots[slotIndex];
+    if (!item) return;
+
+    // Find first empty crafting slot
+    const emptySlotIdx = craftingSlots.findIndex(s => s === null);
+    
+    if (emptySlotIdx !== -1) {
+      // Move from Inventory to Crafting Slot
+      const newInventory = inventory.map(c => {
+          if (c.id === containerId) {
+              const newSlots = [...c.slots];
+              newSlots[slotIndex] = null;
+              return { ...c, slots: newSlots };
+          }
+          return c;
+      });
+      setInventory(newInventory);
+
+      const newCraftingSlots = [...craftingSlots];
+      newCraftingSlots[emptySlotIdx] = item;
+      setCraftingSlots(newCraftingSlots);
+    } else {
+      alert(language === 'pt' ? 'Mesa de combinação cheia!' : 'Crafting table full!');
+    }
+  };
+
+  const handleReturnFromCrafting = (index: number) => {
+    const item = craftingSlots[index];
+    if (!item) return;
+
+    // Return to inventory
+    addToInventory(item, 'crafting'); // Treat like any addition
+
+    const newSlots = [...craftingSlots];
+    newSlots[index] = null;
+    setCraftingSlots(newSlots);
+  };
+
+  const handleCombine = () => {
+    // 1. Tally up ingredients in the grid
+    const ingredients: Record<string, number> = {};
+    const filledSlots: number[] = [];
+
+    craftingSlots.forEach((slot, idx) => {
+       if (slot) {
+         filledSlots.push(idx);
+         ingredients[slot.en] = (ingredients[slot.en] || 0) + slot.quantity;
+       }
+    });
+
+    if (filledSlots.length === 0) return;
+
+    // 2. Find matching recipe
+    const recipe = CRAFTING_RECIPES.find(r => {
+       // Check if all inputs are satisfied
+       return r.inputs.every(req => (ingredients[req.nameEn] || 0) >= req.quantity) &&
+              Object.keys(ingredients).every(ingName => r.inputs.some(req => req.nameEn === ingName));
+    });
+
+    if (recipe) {
+       // 3. Consume Ingredients
+       const newSlots = [...craftingSlots];
+       
+       // Simple consumption: Clear all slots used.
+       filledSlots.forEach(idx => newSlots[idx] = null);
+       setCraftingSlots(newSlots);
+
+       // 4. Create Output
+       const outputItem: InventoryItem = {
+          ...recipe.output,
+          uuid: crypto.randomUUID()
+       };
+
+       addToInventory(outputItem, 'crafting');
+       alert(language === 'pt' ? `Criado: ${outputItem.pt}!` : `Crafted: ${outputItem.en}!`);
+
+    } else {
+       alert(language === 'pt' ? 'Combinação inválida.' : 'Invalid combination.');
+    }
+  };
+
 
   // Handle Drop Item from Inventory
   const handleDropItem = (containerId: number, slotIndex: number) => {
@@ -370,6 +461,9 @@ const App: React.FC = () => {
 
     setSelectedMarker(null);
     setClickedHex(null); // Close Loot Menu
+    // We do NOT clear crafting slots on teleport if they are in inventory now, 
+    // but maybe good practice to reset if we consider crafting a stationary activity?
+    // Let's keep them for now, assuming portable crafting.
     setIsMinimapOpen(false);
     
     const startPos = playerPos;
@@ -441,6 +535,21 @@ const App: React.FC = () => {
       const key = e.key;
       pressedKeys.current.add(key);
 
+      // --- LOOT INTERACTION (Press 'C') ---
+      if (key.toLowerCase() === 'c') {
+         // Calculate resources for Current Player Position
+         const biome = getBiome(playerPos.q, playerPos.r, settings);
+         const resources = getHexResources(playerPos.q, playerPos.r, settings.seed, biome);
+         
+         // Fetch dropped items for Current Player Position
+         const itemKey = `${playerPos.q},${playerPos.r}`;
+         const groundItems = droppedItems[itemKey] || [];
+
+         setClickedHex(playerPos);
+         setClickedHexResources({ ...resources, droppedItems: groundItems });
+         return;
+      }
+
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
         e.preventDefault();
       }
@@ -500,7 +609,7 @@ const App: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [movePlayer, hasStarted, isTeleporting]);
+  }, [movePlayer, hasStarted, isTeleporting, playerPos, settings, droppedItems]);
 
   return (
     <div className="relative w-full h-full bg-slate-900 overflow-hidden text-slate-200">
@@ -543,16 +652,20 @@ const App: React.FC = () => {
             onOpenMinimap={() => setIsMinimapOpen(true)}
           />
           
-          {/* Inventory Dock */}
+          {/* Inventory Dock - NOW HANDLES CRAFTING UI */}
           <Dock 
             inventory={inventory} 
             language={language} 
             onDropItem={handleDropItem}
+            onAddToCrafting={handleAddToCrafting} 
+            onRemoveFromCrafting={handleReturnFromCrafting}
+            craftingSlots={craftingSlots}
+            onCombine={handleCombine}
           />
 
-          {/* LOOT MENU / RESOURCE MODAL */}
+          {/* LOOT MENU (C) - SIMPLIFIED TO LOOT ONLY */}
           {clickedHex && clickedHexResources && (
-             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-900/95 backdrop-blur-md border border-slate-600 rounded-xl p-4 shadow-2xl z-50 w-80 animate-in fade-in zoom-in duration-200">
+             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-900/95 backdrop-blur-md border border-slate-600 rounded-xl p-4 shadow-2xl z-50 w-[350px] animate-in fade-in zoom-in duration-200">
                 <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
                    <div className="flex flex-col">
                       <h3 className="text-white font-bold text-lg">{language === 'pt' ? 'Recursos Locais' : 'Local Resources'}</h3>
@@ -560,17 +673,6 @@ const App: React.FC = () => {
                    </div>
                    <button onClick={() => setClickedHex(null)} className="text-slate-400 hover:text-white">✕</button>
                 </div>
-
-                {/* If selected marker exists (Saved Location), allow teleport actions here too */}
-                {selectedMarker && !isTeleporting && (
-                    <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded flex justify-between items-center">
-                        <span className="text-yellow-400 font-bold text-sm truncate max-w-[120px]">{selectedMarker.name}</span>
-                        <div className="flex gap-1">
-                            <button onClick={() => handleTeleport(selectedMarker)} className="text-[10px] bg-emerald-700 px-2 py-1 rounded text-white">TP</button>
-                            <button onClick={() => handleDeleteLocation(selectedMarker.id)} className="text-[10px] bg-red-800 px-2 py-1 rounded text-white">DEL</button>
-                        </div>
-                    </div>
-                )}
 
                 <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                     {[
