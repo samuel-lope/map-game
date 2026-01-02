@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import HexCanvas from './components/HexCanvas';
 import Controls from './components/Controls';
 import LandingPage from './components/LandingPage';
 import Dock from './components/Dock';
 import MinimapModal from './components/MinimapModal';
+import PeriodicTableModal from './components/PeriodicTableModal';
 import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED, DEFAULT_TERRAIN_WEIGHTS, CRAFTING_RECIPES, TERRAIN_RESOURCES, GLOBAL_BIOMES_DATA } from './constants';
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, InventoryContainer, InventoryItem, TerrainType, BiomeResourceData, VegetationDefinition, GlobalBiomeDef, GlobalBiomeConfig } from './types';
 import { generateRandomCoordinate, getElevation, getHexResources, getTerrain, getGlobalBiome } from './utils/rng';
@@ -98,6 +100,7 @@ const App: React.FC = () => {
   // UI Selection State
   const [selectedMarker, setSelectedMarker] = useState<SavedLocation | null>(null);
   const [isMinimapOpen, setIsMinimapOpen] = useState(false);
+  const [isPeriodicTableOpen, setIsPeriodicTableOpen] = useState(false);
 
   // Input State
   const pressedKeys = useRef<Set<string>>(new Set());
@@ -499,6 +502,7 @@ const App: React.FC = () => {
     setSelectedMarker(null);
     setClickedHex(null); 
     setIsMinimapOpen(false);
+    setIsPeriodicTableOpen(false);
     
     const startPos = playerPos;
     const endPos = { q: loc.x, r: loc.y };
@@ -574,6 +578,7 @@ const App: React.FC = () => {
         setSelectedMarker(null);
         setClickedHex(null);
         setIsMinimapOpen(false);
+        setIsPeriodicTableOpen(false);
         setEditorState({ ...editorState, isOpen: false });
         return;
       }
@@ -768,6 +773,7 @@ const App: React.FC = () => {
             setLanguage={setLanguage}
             currentResources={currentResources}
             onOpenMinimap={() => setIsMinimapOpen(true)}
+            onOpenPeriodicTable={() => setIsPeriodicTableOpen(true)}
             onEditBiome={handleEditGlobalBiome}
             onEditResource={handleEditResource}
           />
@@ -865,6 +871,14 @@ const App: React.FC = () => {
                 onRemoveResource={handleRemoveGlobalResource}
                 language={language}
              />
+          )}
+
+          {/* PERIODIC TABLE MODAL */}
+          {isPeriodicTableOpen && (
+            <PeriodicTableModal 
+              onClose={() => setIsPeriodicTableOpen(false)}
+              language={language}
+            />
           )}
 
 

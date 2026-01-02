@@ -143,3 +143,39 @@ export interface CraftingRecipe {
 }
 
 export type Language = 'pt' | 'en';
+
+// --- PERIODIC TABLE TYPES ---
+
+export interface AtomicStructure {
+  protons: number;
+  neutrons: number;
+  eletrons: number;
+  raio_atomico_pm: number;
+  eletronegatividade_pauling: number | null;
+}
+
+export interface PeriodicElement {
+  numero_atomico: number;
+  simbolo: string;
+  nome: { pt_BR: string; en_US: string };
+  massa_atomica: number;
+  configuracao_eletronica: string;
+  camadas: number[];
+  estado_fisico_padrao: string;
+  estrutura_atomica: AtomicStructure;
+  fontes_naturais: { pt_BR: string[]; en_US: string[] };
+}
+
+export interface PeriodicCategory {
+  nome: { pt_BR: string; en_US: string };
+  elementos: PeriodicElement[];
+}
+
+export interface PeriodicTableData {
+  tabela_periodica: {
+    versao: string;
+    descricao: string;
+    categorias: PeriodicCategory[];
+    nota_informativa: string;
+  };
+}

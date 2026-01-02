@@ -23,6 +23,8 @@ interface ControlsProps {
   currentResources: HexResources;
   // Minimap
   onOpenMinimap?: () => void;
+  // Periodic Table
+  onOpenPeriodicTable?: () => void;
   // Educational Editing
   onEditBiome?: (biome: GlobalBiomeDef) => void; // UPDATED to Global Biome
   onEditResource?: (item: LocalizedName, category: string, terrain: TerrainType) => void;
@@ -44,6 +46,7 @@ const Controls: React.FC<ControlsProps> = ({
   setLanguage,
   currentResources,
   onOpenMinimap,
+  onOpenPeriodicTable,
   onEditBiome,
   onEditResource
 }) => {
@@ -252,7 +255,7 @@ const Controls: React.FC<ControlsProps> = ({
       </div>
 
       {/* Top Right: Status */}
-      <div className="absolute top-4 right-4 pointer-events-auto">
+      <div className="absolute top-4 right-4 pointer-events-auto flex flex-col items-end gap-2">
         <div className="bg-slate-900/80 backdrop-blur p-4 rounded-lg border border-slate-700 text-slate-200 w-56 shadow-xl max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600">
            <h3 className="font-bold border-b border-slate-700 mb-2 pb-1 text-slate-400 text-sm uppercase tracking-wider">Status</h3>
            <div className="flex justify-between text-sm mb-1">
@@ -421,6 +424,19 @@ const Controls: React.FC<ControlsProps> = ({
            </div>
 
         </div>
+
+        {/* PERIODIC TABLE BUTTON */}
+        {onOpenPeriodicTable && (
+          <button 
+            onClick={onOpenPeriodicTable}
+            className="w-56 bg-gradient-to-r from-blue-900 to-indigo-900 hover:from-blue-800 hover:to-indigo-800 text-white p-2 rounded-lg border border-blue-700 shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+          >
+            <span className="text-xl">⚛</span>
+            <span className="font-bold text-xs uppercase tracking-wider">
+              {language === 'pt' ? 'Tabela Periódica' : 'Periodic Table'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* --- CUSTOM MODALS --- */}
