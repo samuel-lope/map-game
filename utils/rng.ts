@@ -272,7 +272,8 @@ export function getHexResources(q: number, r: number, seed: string, biome: Biome
     animals: [],
     minerals: [],
     rareStones: [],
-    vegetation: []
+    vegetation: [],
+    droppedItems: []
   };
   
   const data = BIOME_RESOURCES[biome];

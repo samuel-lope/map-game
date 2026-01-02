@@ -5,13 +5,22 @@ import LandingPage from './components/LandingPage';
 import Dock from './components/Dock';
 import MinimapModal from './components/MinimapModal';
 import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED, DEFAULT_BIOME_WEIGHTS } from './constants';
-import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, BiomeWeights } from './types';
+import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, InventoryContainer, InventoryItem } from './types';
 import { generateRandomCoordinate, getElevation, getHexResources, getBiome } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
 
 // Easing function for smooth animation (Ease In Out Cubic)
 const easeInOutCubic = (t: number): number => {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+};
+
+// Initial Empty Inventory Helper
+const createEmptyInventory = (): InventoryContainer[] => {
+  return Array.from({ length: 6 }, (_, i) => ({
+    id: i,
+    name: `Container ${i + 1}`,
+    slots: Array(36).fill(null)
+  }));
 };
 
 const App: React.FC = () => {
@@ -39,17 +48,26 @@ const App: React.FC = () => {
   const [metersTraveled, setMetersTraveled] = useState(0);
   const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   
+  // Inventory State
+  const [inventory, setInventory] = useState<InventoryContainer[]>(createEmptyInventory());
+  // Dropped Items State: Key is "q,r", Value is array of items
+  const [droppedItems, setDroppedItems] = useState<Record<string, InventoryItem[]>>({});
+  
+  // Looting Interaction State
+  const [clickedHex, setClickedHex] = useState<HexCoordinate | null>(null);
+  const [clickedHexResources, setClickedHexResources] = useState<HexResources | null>(null);
+
   // Bounds Tracking
   const [exploredBounds, setExploredBounds] = useState<ExploredBounds>({ minQ: 0, maxQ: 0, minR: 0, maxR: 0 });
   
-  // Resource State
+  // Resource State (Current Player Position)
   const [currentResources, setCurrentResources] = useState<HexResources>({
     animals: [],
     minerals: [],
     rareStones: [],
-    vegetation: []
+    vegetation: [],
+    droppedItems: []
   });
-  const [recentItems, setRecentItems] = useState<LocalizedName[]>([]);
 
   // View State
   const [rotation, setRotation] = useState(0); // Degrees
@@ -92,7 +110,15 @@ const App: React.FC = () => {
   }, []);
 
   // Function to save data to LocalStorage
-  const saveToStorage = useCallback((currentSettings: MapSettings, pos: HexCoordinate, spawn: HexCoordinate, locations: SavedLocation[], bounds: ExploredBounds) => {
+  const saveToStorage = useCallback((
+    currentSettings: MapSettings, 
+    pos: HexCoordinate, 
+    spawn: HexCoordinate, 
+    locations: SavedLocation[], 
+    bounds: ExploredBounds, 
+    inv: InventoryContainer[],
+    dropped: Record<string, InventoryItem[]>
+  ) => {
     const key = getStorageKey(currentSettings.seed);
     const elevation = getElevation(pos.q, pos.r, currentSettings);
     
@@ -102,6 +128,8 @@ const App: React.FC = () => {
       y: pos.r,
       altitude: elevation,
       saved_positions: locations,
+      inventory: inv,
+      dropped_items: dropped,
       start_x: spawn.q,
       start_y: spawn.r,
       explored_bounds: bounds,
@@ -126,6 +154,13 @@ const App: React.FC = () => {
       });
       setSavedLocations(saveData.saved_positions || []);
       
+      if (saveData.inventory) {
+        setInventory(saveData.inventory);
+      }
+      if (saveData.dropped_items) {
+        setDroppedItems(saveData.dropped_items);
+      }
+      
       // Load Bounds
       if (saveData.explored_bounds) {
         setExploredBounds(saveData.explored_bounds);
@@ -146,6 +181,8 @@ const App: React.FC = () => {
       setPlayerPos(initialPos);
       setSpawnPos(initialPos);
       setSavedLocations([]);
+      setInventory(createEmptyInventory());
+      setDroppedItems({});
       setMetersTraveled(0);
       
       const initialBounds = {
@@ -154,7 +191,7 @@ const App: React.FC = () => {
       setExploredBounds(initialBounds);
       
       // Create initial save file
-      saveToStorage(settings, initialPos, initialPos, [], initialBounds);
+      saveToStorage(settings, initialPos, initialPos, [], initialBounds, createEmptyInventory(), {});
     }
     
     setHasStarted(true);
@@ -184,42 +221,132 @@ const App: React.FC = () => {
   // Auto-save
   useEffect(() => {
     if (hasStarted && !isTeleporting) {
-      saveToStorage(settings, playerPos, spawnPos, savedLocations, exploredBounds);
+      saveToStorage(settings, playerPos, spawnPos, savedLocations, exploredBounds, inventory, droppedItems);
     }
-  }, [playerPos, spawnPos, savedLocations, exploredBounds, hasStarted, settings, saveToStorage, isTeleporting]);
+  }, [playerPos, spawnPos, savedLocations, exploredBounds, inventory, droppedItems, hasStarted, settings, saveToStorage, isTeleporting]);
 
 
   // --- RESOURCE CALCULATION LOGIC ---
   useEffect(() => {
     if (!hasStarted) return;
     
+    // For Status Panel
     const currentBiome = getBiome(playerPos.q, playerPos.r, settings);
     const resources = getHexResources(playerPos.q, playerPos.r, settings.seed, currentBiome);
-    setCurrentResources(resources);
+    
+    // Merge dropped items for current position
+    const key = `${playerPos.q},${playerPos.r}`;
+    const groundItems = droppedItems[key] || [];
+    
+    setCurrentResources({ ...resources, droppedItems: groundItems });
 
-    // Update Dock Items
-    const foundItems: LocalizedName[] = [
-      ...resources.rareStones,
-      ...resources.animals,
-      ...resources.vegetation,
-      ...resources.minerals
-    ];
-
-    if (foundItems.length > 0) {
-      setRecentItems(prev => {
-        let newHistory = [...prev];
-        foundItems.forEach(item => {
-           newHistory = newHistory.filter(h => h.en !== item.en);
-           newHistory.unshift(item);
-        });
-        return newHistory.slice(0, 6);
-      });
-    }
-
-  }, [playerPos, settings, hasStarted]);
+  }, [playerPos, settings, hasStarted, droppedItems]);
 
 
   // --- EVENT HANDLERS ---
+
+  const handleHexClick = (hex: HexCoordinate) => {
+    // 1. Calculate resources for this hex
+    const biome = getBiome(hex.q, hex.r, settings);
+    const resources = getHexResources(hex.q, hex.r, settings.seed, biome);
+    
+    // 2. Fetch dropped items
+    const key = `${hex.q},${hex.r}`;
+    const groundItems = droppedItems[key] || [];
+
+    setClickedHex(hex);
+    setClickedHexResources({ ...resources, droppedItems: groundItems });
+
+    // 3. Check if it's a saved location for teleport/delete purposes (Legacy feature maintained)
+    const found = savedLocations.find(loc => loc.x === hex.q && loc.y === hex.r);
+    setSelectedMarker(found || null);
+  };
+
+  // Handle collecting items (from nature or ground)
+  const handleCollectItem = (item: LocalizedName | InventoryItem, source: 'nature' | 'ground', hex?: HexCoordinate) => {
+    // Find first empty slot in the inventory (across all containers)
+    let targetContainerIdx = -1;
+    let targetSlotIdx = -1;
+
+    for (let i = 0; i < inventory.length; i++) {
+        const slotIdx = inventory[i].slots.findIndex(s => s === null);
+        if (slotIdx !== -1) {
+            targetContainerIdx = i;
+            targetSlotIdx = slotIdx;
+            break;
+        }
+    }
+
+    if (targetContainerIdx !== -1 && targetSlotIdx !== -1) {
+        // Create the inventory item
+        const newItem: InventoryItem = {
+            ...item,
+            uuid: (item as InventoryItem).uuid || crypto.randomUUID(), // Preserve UUID if exists, else new
+            quantity: (item as InventoryItem).quantity || 1
+        };
+
+        const newInventory = [...inventory];
+        newInventory[targetContainerIdx] = {
+            ...newInventory[targetContainerIdx],
+            slots: [...newInventory[targetContainerIdx].slots]
+        };
+        newInventory[targetContainerIdx].slots[targetSlotIdx] = newItem;
+
+        setInventory(newInventory);
+
+        // Remove from ground if applicable
+        if (source === 'ground' && hex) {
+            const key = `${hex.q},${hex.r}`;
+            setDroppedItems(prev => {
+                const current = prev[key] || [];
+                const updated = current.filter(i => i.uuid !== (item as InventoryItem).uuid);
+                
+                // Update the Loot Menu View immediately
+                if (clickedHex && clickedHex.q === hex.q && clickedHex.r === hex.r && clickedHexResources) {
+                    setClickedHexResources({
+                        ...clickedHexResources,
+                        droppedItems: updated
+                    });
+                }
+
+                if (updated.length === 0) {
+                    const { [key]: _, ...rest } = prev;
+                    return rest;
+                }
+                return { ...prev, [key]: updated };
+            });
+        }
+    } else {
+        alert(language === 'pt' ? 'Inventário Cheio!' : 'Inventory Full!');
+    }
+  };
+
+  // Handle Drop Item from Inventory
+  const handleDropItem = (containerId: number, slotIndex: number) => {
+      const container = inventory.find(c => c.id === containerId);
+      if (!container) return;
+      const item = container.slots[slotIndex];
+      if (!item) return;
+
+      // 1. Remove from Inventory
+      const newInventory = inventory.map(c => {
+          if (c.id === containerId) {
+              const newSlots = [...c.slots];
+              newSlots[slotIndex] = null;
+              return { ...c, slots: newSlots };
+          }
+          return c;
+      });
+      setInventory(newInventory);
+
+      // 2. Add to Ground at Player Position
+      const key = `${playerPos.q},${playerPos.r}`;
+      setDroppedItems(prev => {
+          const current = prev[key] || [];
+          const updated = [...current, item];
+          return { ...prev, [key]: updated };
+      });
+  };
 
   const handleSaveLocation = (name: string) => {
     const newLoc: SavedLocation = {
@@ -242,6 +369,7 @@ const App: React.FC = () => {
     if (isTeleporting) return;
 
     setSelectedMarker(null);
+    setClickedHex(null); // Close Loot Menu
     setIsMinimapOpen(false);
     
     const startPos = playerPos;
@@ -281,16 +409,6 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    return () => cancelAnimationFrame(animationFrameRef.current);
-  }, []);
-
-  const handleMarkerSelect = (loc: SavedLocation | null) => {
-    if (!isTeleporting) {
-      setSelectedMarker(loc);
-    }
-  };
-
-  useEffect(() => {
     const handleResize = () => {
       setDimensions({ 
         width: Math.ceil(window.innerWidth), 
@@ -312,6 +430,7 @@ const App: React.FC = () => {
     }));
     setMetersTraveled(prev => prev + 500);
     setSelectedMarker(null);
+    setClickedHex(null); // Close loot menu on move
   }, [hasStarted, rotation, isTeleporting]);
 
   useEffect(() => {
@@ -328,6 +447,7 @@ const App: React.FC = () => {
 
       if (key === 'Escape') {
         setSelectedMarker(null);
+        setClickedHex(null);
         setIsMinimapOpen(false);
         return;
       }
@@ -402,7 +522,8 @@ const App: React.FC = () => {
             settings={settings}
             rotation={rotation}
             savedLocations={savedLocations}
-            onLocationSelect={handleMarkerSelect}
+            onHexClick={handleHexClick}
+            selectedLocation={selectedMarker}
           />
           <Controls 
             settings={settings}
@@ -422,15 +543,86 @@ const App: React.FC = () => {
             onOpenMinimap={() => setIsMinimapOpen(true)}
           />
           
-          <Dock items={recentItems} language={language} />
+          {/* Inventory Dock */}
+          <Dock 
+            inventory={inventory} 
+            language={language} 
+            onDropItem={handleDropItem}
+          />
 
-          {metersTraveled === 0 && savedLocations.length === 0 && !isTeleporting && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center opacity-70 animate-pulse z-50">
+          {/* LOOT MENU / RESOURCE MODAL */}
+          {clickedHex && clickedHexResources && (
+             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-900/95 backdrop-blur-md border border-slate-600 rounded-xl p-4 shadow-2xl z-50 w-80 animate-in fade-in zoom-in duration-200">
+                <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                   <div className="flex flex-col">
+                      <h3 className="text-white font-bold text-lg">{language === 'pt' ? 'Recursos Locais' : 'Local Resources'}</h3>
+                      <span className="text-slate-500 text-xs font-mono">Q:{clickedHex.q} R:{clickedHex.r}</span>
+                   </div>
+                   <button onClick={() => setClickedHex(null)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+
+                {/* If selected marker exists (Saved Location), allow teleport actions here too */}
+                {selectedMarker && !isTeleporting && (
+                    <div className="mb-4 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded flex justify-between items-center">
+                        <span className="text-yellow-400 font-bold text-sm truncate max-w-[120px]">{selectedMarker.name}</span>
+                        <div className="flex gap-1">
+                            <button onClick={() => handleTeleport(selectedMarker)} className="text-[10px] bg-emerald-700 px-2 py-1 rounded text-white">TP</button>
+                            <button onClick={() => handleDeleteLocation(selectedMarker.id)} className="text-[10px] bg-red-800 px-2 py-1 rounded text-white">DEL</button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                    {[
+                        ...clickedHexResources.droppedItems,
+                        ...clickedHexResources.vegetation, 
+                        ...clickedHexResources.animals, 
+                        ...clickedHexResources.minerals, 
+                        ...clickedHexResources.rareStones
+                    ].length === 0 ? (
+                        <p className="text-slate-500 italic text-center text-sm py-4">{language === 'pt' ? 'Nada aqui.' : 'Nothing here.'}</p>
+                    ) : (
+                        <>
+                           {/* DROPPED ITEMS */}
+                           {clickedHexResources.droppedItems.length > 0 && (
+                               <div className="mb-2">
+                                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{language === 'pt' ? 'No Chão' : 'On Ground'}</div>
+                                   {clickedHexResources.droppedItems.map((item, i) => (
+                                       <LootItem key={`drop-${item.uuid}`} item={item} language={language} onCollect={() => handleCollectItem(item, 'ground', clickedHex)} isDropped={true} />
+                                   ))}
+                               </div>
+                           )}
+
+                           {/* NATURAL RESOURCES */}
+                           {(clickedHexResources.vegetation.length > 0 || clickedHexResources.animals.length > 0 || clickedHexResources.minerals.length > 0 || clickedHexResources.rareStones.length > 0) && (
+                               <div>
+                                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{language === 'pt' ? 'Natureza' : 'Nature'}</div>
+                                   {clickedHexResources.vegetation.map((item, i) => (
+                                       <LootItem key={`veg-${i}`} item={item} language={language} onCollect={() => handleCollectItem(item, 'nature')} />
+                                   ))}
+                                   {clickedHexResources.animals.map((item, i) => (
+                                       <LootItem key={`anim-${i}`} item={item} language={language} onCollect={() => handleCollectItem(item, 'nature')} />
+                                   ))}
+                                   {clickedHexResources.minerals.map((item, i) => (
+                                       <LootItem key={`min-${i}`} item={item} language={language} onCollect={() => handleCollectItem(item, 'nature')} />
+                                   ))}
+                                   {clickedHexResources.rareStones.map((item, i) => (
+                                       <LootItem key={`rare-${i}`} item={item} language={language} onCollect={() => handleCollectItem(item, 'nature')} />
+                                   ))}
+                               </div>
+                           )}
+                        </>
+                    )}
+                </div>
+             </div>
+          )}
+
+          {metersTraveled === 0 && savedLocations.length === 0 && !isTeleporting && !clickedHex && (
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center opacity-70 animate-pulse z-40">
                <h1 className="text-4xl font-bold text-white mb-2 tracking-widest uppercase drop-shadow-lg">Explorar</h1>
                <div className="flex flex-col gap-1 items-center bg-slate-900/50 px-6 py-2 rounded-xl border border-white/10">
                  <p className="text-white font-bold text-lg">Use as Setas</p>
                  <p className="text-slate-300 text-xs">← Esquerda / Direita →</p>
-                 <p className="text-slate-400 text-[10px] uppercase tracking-wider">Combine com ↑ Cima / Baixo ↓</p>
                </div>
             </div>
           )}
@@ -439,35 +631,6 @@ const App: React.FC = () => {
              <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 pointer-events-none z-50">
                 <div className="bg-blue-600/80 backdrop-blur text-white px-4 py-2 rounded-full font-bold shadow-lg animate-bounce border border-blue-400">
                    TRAVELING...
-                </div>
-             </div>
-          )}
-
-          {selectedMarker && !isTeleporting && (
-             <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-slate-800/90 backdrop-blur border border-yellow-500/50 p-4 rounded-xl shadow-2xl z-40 min-w-[280px] animate-in fade-in zoom-in duration-200">
-                <div className="flex justify-between items-start mb-2 border-b border-slate-700 pb-2">
-                  <h3 className="font-bold text-yellow-400 text-lg truncate pr-4">{selectedMarker.name}</h3>
-                  <button onClick={() => setSelectedMarker(null)} className="text-slate-400 hover:text-white">✕</button>
-                </div>
-                <div className="text-xs text-slate-400 font-mono mb-4 flex gap-4">
-                  <span>Q: <span className="text-white">{selectedMarker.x}</span></span>
-                  <span>R: <span className="text-white">{selectedMarker.y}</span></span>
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => handleTeleport(selectedMarker)}
-                    className="flex-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold py-2 px-3 rounded text-sm transition-colors shadow-lg flex items-center justify-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor"><path d="M480-388q54-50 84-80t47-50q16-20 22.5-37t6.5-37q0-36-26-62t-62-26q-21 0-40.5 8.5T480-648q-12-15-31-23.5t-41-8.5q-36 0-62 26t-26 62q0 21 6 37t22 36q17 20 46 50t86 81Zm0 202q122-112 181-203.5T720-552q0-109-69.5-178.5T480-800q-101 0-170.5 69.5T240-552q0 71 59 162.5T480-186Zm0 106Q319-217 239.5-334.5T160-552q0-150 96.5-239T480-880q127 0 223.5 89T800-552q0 100-79.5 217.5T480-80Zm0-480Z"/></svg>
-                    TELEPORT
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteLocation(selectedMarker.id)}
-                    className="bg-red-900/50 hover:bg-red-700 text-red-200 font-bold py-2 px-3 rounded text-sm transition-colors border border-red-900"
-                    title="Delete"
-                  >
-                    🗑
-                  </button>
                 </div>
              </div>
           )}
@@ -488,5 +651,25 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+// Helper Component for Loot Items
+const LootItem: React.FC<{ item: LocalizedName; language: Language; onCollect: () => void; isDropped?: boolean }> = ({ item, language, onCollect, isDropped }) => (
+    <div className={`flex items-center justify-between p-2 rounded border transition-colors mb-1 ${isDropped ? 'bg-slate-800/80 border-blue-900/50' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+        <div className="flex items-center gap-2 overflow-hidden">
+            {item.image ? (
+                <img src={item.image} alt="icon" className="w-8 h-8 rounded bg-black object-cover" />
+            ) : (
+                <div className="w-8 h-8 bg-slate-700 rounded flex items-center justify-center text-xs">?</div>
+            )}
+            <span className={`text-sm truncate ${isDropped ? 'text-blue-200' : 'text-slate-200'}`}>{item[language]}</span>
+        </div>
+        <button 
+            onClick={onCollect}
+            className="ml-2 bg-blue-700 hover:bg-blue-600 text-white text-[10px] font-bold px-2 py-1.5 rounded uppercase tracking-wide shadow-sm"
+        >
+            {language === 'pt' ? 'Pegar' : 'Take'}
+        </button>
+    </div>
+);
 
 export default App;

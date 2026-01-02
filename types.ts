@@ -42,6 +42,17 @@ export interface SavedLocation {
   timestamp: number;
 }
 
+export interface InventoryItem extends LocalizedName {
+  uuid: string; // Unique ID for the specific instance in inventory
+  quantity: number;
+}
+
+export interface InventoryContainer {
+  id: number;
+  name: string;
+  slots: (InventoryItem | null)[]; // Fixed size 36
+}
+
 export interface ExploredBounds {
   minQ: number;
   maxQ: number;
@@ -55,12 +66,11 @@ export interface MapSaveData {
   y: number; // Current r
   altitude: number;
   saved_positions: SavedLocation[];
+  inventory?: InventoryContainer[]; 
+  dropped_items?: Record<string, InventoryItem[]>; // Key: "q,r", Value: Items
   start_x?: number; // Origin q
   start_y?: number; // Origin r
   explored_bounds?: ExploredBounds;
-  // We don't strictly save weights to keep seeds shareable, 
-  // but in a full app you might want to save config too.
-  // For this version, we assume seed + config recreates the world.
   biome_weights?: BiomeWeights; 
 }
 
@@ -89,6 +99,7 @@ export interface HexResources {
   minerals: LocalizedName[];
   rareStones: LocalizedName[];
   vegetation: VegetationDefinition[];
+  droppedItems: InventoryItem[]; // Items dropped by player
 }
 
 export type Language = 'pt' | 'en';

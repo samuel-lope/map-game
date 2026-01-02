@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { BiomeType, HexCoordinate, MapSettings, SavedLocation } from '../types';
 import { hexToPixel, getHexRing, pixelToHex, hexDistance } from '../utils/hexMath';
 import { getBiome } from '../utils/rng';
@@ -12,7 +12,8 @@ interface HexCanvasProps {
   height: number;
   rotation: number; // degrees
   savedLocations: SavedLocation[];
-  onLocationSelect: (loc: SavedLocation | null) => void;
+  onHexClick: (hex: HexCoordinate) => void; // CHANGED: Generic click handler
+  selectedLocation: SavedLocation | null;
 }
 
 // Pre-calculate corners for a hexagon of size 1 relative to (0,0)
@@ -33,7 +34,8 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
   height,
   rotation, 
   savedLocations,
-  onLocationSelect
+  onHexClick,
+  selectedLocation
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [textures, setTextures] = useState<Record<BiomeType, CanvasPattern | string> | null>(null);
@@ -84,8 +86,6 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     // 3. Move world so player is at the new origin (camera center)
     const centerPix = hexToPixel(playerPos.q, playerPos.r, settings.hexSize);
     // Integer align the world camera position to prevent swimming artifacts
-    // Note: This might cause slightly jerky camera movement if not careful, but looks sharper static.
-    // For smooth movement, we keep float. For "deformed" shape fix, rotation center translation is more key.
     ctx.translate(-centerPix.x, -centerPix.y);
 
     // Get Visible Hexes
@@ -110,12 +110,11 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
 
     ctx.restore();
 
-  }, [playerPos, settings, width, height, rotation, savedLocations, textures]);
+  }, [playerPos, settings, width, height, rotation, savedLocations, textures, selectedLocation]);
 
-  // Handle Canvas Clicks
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getHexFromMouseEvent = (e: React.MouseEvent<HTMLCanvasElement>): HexCoordinate | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
 
     // Get mouse position relative to canvas center
     const rect = canvas.getBoundingClientRect();
@@ -133,14 +132,15 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     const worldY = ry + centerPix.y;
 
     // Convert World pixel to Hex Coordinate
-    const clickedHex = pixelToHex(worldX, worldY, settings.hexSize);
+    return pixelToHex(worldX, worldY, settings.hexSize);
+  };
 
-    // Check if we clicked on a saved location
-    const found = savedLocations.find(loc => {
-        return loc.x === clickedHex.q && loc.y === clickedHex.r;
-    });
+  // Handle Canvas Clicks
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const clickedHex = getHexFromMouseEvent(e);
+    if (!clickedHex) return;
 
-    onLocationSelect(found || null);
+    onHexClick(clickedHex);
   };
 
   const drawHex = (
@@ -149,12 +149,11 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     size: number, 
     currentSettings: MapSettings, 
     textureMap: Record<BiomeType, CanvasPattern | string>
-) => {
+  ) => {
     const { x, y } = hexToPixel(hex.q, hex.r, size);
     
     // Draw using pre-calculated corners to ensure perfect consistent geometry
     ctx.beginPath();
-    // Using a loop unroll or standard loop over static array is cleaner
     ctx.moveTo(x + HEX_CORNERS[0].x * size, y + HEX_CORNERS[0].y * size);
     for (let i = 1; i < 6; i++) {
         ctx.lineTo(x + HEX_CORNERS[i].x * size, y + HEX_CORNERS[i].y * size);
@@ -182,9 +181,9 @@ const HexCanvas: React.FC<HexCanvasProps> = ({
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Border
-    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-    ctx.lineWidth = 1;
+    // Standard Border (Thicker)
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 2; // Thicker default border
     ctx.stroke();
 
     if (size > 30) {
