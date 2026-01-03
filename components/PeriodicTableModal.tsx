@@ -269,16 +269,23 @@ const PeriodicTableModal: React.FC<PeriodicTableModalProps> = ({ onClose, langua
 
       {/* --- ELEMENT DETAILS MODAL (Overlay) --- */}
       {selectedElement && (
-        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div 
+          className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setSelectedElement(null)}
+        >
+          
+          {/* Close button outside container */}
+          <button 
+             onClick={() => setSelectedElement(null)}
+             className="absolute top-6 right-6 z-[120] w-12 h-12 flex items-center justify-center rounded-full bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors border border-slate-600 shadow-xl backdrop-blur-sm"
+          >
+             <span className="text-2xl font-light">✕</span>
+          </button>
+
           <div 
             className="bg-slate-900 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col max-h-[90vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <button 
-                 onClick={() => setSelectedElement(null)}
-                 className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-600"
-            >✕</button>
-
             {/* Horizontal Layout for Widescreen */}
             <div className="flex flex-col md:grid md:grid-cols-[380px_1fr] h-full overflow-hidden">
                 
