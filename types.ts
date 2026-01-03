@@ -32,6 +32,7 @@ export interface MapSettings {
   hexSize: number;
   renderRadius: number;
   seed: string;
+  userCode: string; // New User Code field
   terrainWeights: TerrainWeights;
 }
 
@@ -82,6 +83,7 @@ export interface GlobalBiomeConfig {
 
 export interface MapSaveData {
   seed: string;
+  userCode?: string; // Associated User Code
   x: number; // Current q
   y: number; // Current r
   altitude: number;
@@ -96,6 +98,7 @@ export interface MapSaveData {
   global_biome_configs?: Record<string, GlobalBiomeConfig>;
   // Legacy support for per-terrain resources if needed, or moved to global
   terrain_resources?: Record<TerrainType, BiomeResourceData>;
+  last_played?: number; // Timestamp for sorting
 }
 
 export interface LocalizedName {

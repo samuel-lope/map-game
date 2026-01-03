@@ -10,6 +10,7 @@ import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_TERRAIN_WEIGHTS, CRAFT
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, InventoryContainer, InventoryItem, TerrainType, BiomeResourceData, VegetationDefinition, GlobalBiomeDef, GlobalBiomeConfig } from './types';
 import { generateRandomCoordinate, getElevation, getHexResources, getTerrain, getGlobalBiome, generateHexSeed } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
+import { generateUserCode } from './utils/userIdentity';
 
 // Easing function for smooth animation (Ease In Out Cubic)
 const easeInOutCubic = (t: number): number => {
@@ -50,6 +51,7 @@ const App: React.FC = () => {
     hexSize: DEFAULT_HEX_SIZE,
     renderRadius: DEFAULT_RENDER_RADIUS,
     seed: generateHexSeed(), // Random seed on load
+    userCode: generateUserCode(), // Random user code on load
     terrainWeights: DEFAULT_TERRAIN_WEIGHTS
   });
 
@@ -171,6 +173,7 @@ const App: React.FC = () => {
     
     const data: MapSaveData = {
       seed: currentSettings.seed,
+      userCode: currentSettings.userCode, // SAVE USER CODE
       x: pos.q,
       y: pos.r,
       altitude: elevation,
@@ -181,8 +184,9 @@ const App: React.FC = () => {
       start_y: spawn.r,
       explored_bounds: bounds,
       terrain_weights: currentSettings.terrainWeights,
-      terrain_resources: terrainResources, // Persist legacy/physical structure
-      global_biome_configs: globalBiomeConfigs // Persist new educational structure
+      terrain_resources: terrainResources, 
+      global_biome_configs: globalBiomeConfigs,
+      last_played: Date.now()
     };
 
     localStorage.setItem(key, JSON.stringify(data));
@@ -191,8 +195,16 @@ const App: React.FC = () => {
   // --- INITIALIZATION ---
 
   // Handle Start (Load or New)
-  const handleStartGame = () => {
-    const saveData = loadFromStorage(settings.seed);
+  const handleStartGame = (seedOverride?: string) => {
+    // If a specific seed is provided (e.g. from loading a save), use it
+    // Otherwise use the current settings seed
+    const seedToUse = seedOverride || settings.seed;
+
+    if (seedOverride && seedOverride !== settings.seed) {
+       setSettings(prev => ({ ...prev, seed: seedOverride }));
+    }
+
+    const saveData = loadFromStorage(seedToUse);
     
     // Initialize Default Global Biome Settings if not present
     const defaultGlobalSettings: Record<string, GlobalBiomeConfig> = {};
@@ -212,6 +224,14 @@ const App: React.FC = () => {
       });
       setSavedLocations(saveData.saved_positions || []);
       
+      // If the save has a userCode, respect it (or update settings to match if logic dictates)
+      // For now, if we loaded a map, we use the loaded map's UserCode if available, else keep current
+      if (saveData.userCode) {
+          setSettings(prev => ({ ...prev, userCode: saveData.userCode!, seed: seedToUse }));
+      } else {
+          setSettings(prev => ({ ...prev, seed: seedToUse }));
+      }
+
       if (saveData.inventory) {
         setInventory(saveData.inventory);
       }
@@ -260,11 +280,30 @@ const App: React.FC = () => {
       };
       setExploredBounds(initialBounds);
       
+      // Ensure the settings object has the correct seed before saving initial state
+      const initialSettings = { ...settings, seed: seedToUse };
+      if (seedOverride) setSettings(initialSettings);
+
       // Create initial save file
-      saveToStorage(settings, initialPos, initialPos, [], initialBounds, createEmptyInventory(), {}, TERRAIN_RESOURCES, defaultGlobalSettings);
+      saveToStorage(initialSettings, initialPos, initialPos, [], initialBounds, createEmptyInventory(), {}, TERRAIN_RESOURCES, defaultGlobalSettings);
     }
     
     setHasStarted(true);
+  };
+
+  const handleExitGame = () => {
+     // Save state one last time before exiting
+     saveToStorage(settings, playerPos, spawnPos, savedLocations, exploredBounds, inventory, droppedItems, activeTerrainResources, globalBiomeSettings);
+     
+     // Reset key critical states for landing page
+     setHasStarted(false);
+     setClickedHex(null);
+     setIsMinimapOpen(false);
+     setIsPeriodicTableOpen(false);
+     setEditorState({ ...editorState, isOpen: false });
+     
+     // Generate a fresh seed for the next potential new game (so landing page doesn't show the old seed)
+     setSettings(prev => ({ ...prev, seed: generateHexSeed() }));
   };
 
   // Update bounds whenever player moves
@@ -741,6 +780,8 @@ const App: React.FC = () => {
         <LandingPage 
           seed={settings.seed} 
           setSeed={(val) => setSettings(prev => ({ ...prev, seed: val }))}
+          userCode={settings.userCode}
+          setUserCode={(code) => setSettings(prev => ({ ...prev, userCode: code }))}
           weights={settings.terrainWeights}
           setWeights={(weights) => setSettings(prev => ({ ...prev, terrainWeights: weights }))}
           onStart={handleStartGame}
@@ -776,6 +817,7 @@ const App: React.FC = () => {
             onOpenPeriodicTable={() => setIsPeriodicTableOpen(true)}
             onEditBiome={handleEditGlobalBiome}
             onEditResource={handleEditResource}
+            onExit={handleExitGame}
           />
           
           <Dock 
