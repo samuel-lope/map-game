@@ -51,7 +51,7 @@ const App: React.FC = () => {
     hexSize: DEFAULT_HEX_SIZE,
     renderRadius: DEFAULT_RENDER_RADIUS,
     seed: generateHexSeed(), // Random seed on load
-    userCode: generateUserCode(), // Random user code on load
+    userCode: '', // Start empty to force manual entry
     terrainWeights: DEFAULT_TERRAIN_WEIGHTS
   });
 
@@ -303,6 +303,7 @@ const App: React.FC = () => {
      setEditorState({ ...editorState, isOpen: false });
      
      // Generate a fresh seed for the next potential new game (so landing page doesn't show the old seed)
+     // BUT keep User Code if valid, or clear if desired. Usually keeps session active.
      setSettings(prev => ({ ...prev, seed: generateHexSeed() }));
   };
 
