@@ -6,9 +6,9 @@ import LandingPage from './components/LandingPage';
 import Dock from './components/Dock';
 import MinimapModal from './components/MinimapModal';
 import PeriodicTableModal from './components/PeriodicTableModal';
-import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_SEED, DEFAULT_TERRAIN_WEIGHTS, CRAFTING_RECIPES, TERRAIN_RESOURCES, GLOBAL_BIOMES_DATA } from './constants';
+import { DEFAULT_HEX_SIZE, DEFAULT_RENDER_RADIUS, DEFAULT_TERRAIN_WEIGHTS, CRAFTING_RECIPES, TERRAIN_RESOURCES, GLOBAL_BIOMES_DATA } from './constants';
 import { MapSettings, HexCoordinate, MapSaveData, SavedLocation, Language, LocalizedName, HexResources, ExploredBounds, InventoryContainer, InventoryItem, TerrainType, BiomeResourceData, VegetationDefinition, GlobalBiomeDef, GlobalBiomeConfig } from './types';
-import { generateRandomCoordinate, getElevation, getHexResources, getTerrain, getGlobalBiome } from './utils/rng';
+import { generateRandomCoordinate, getElevation, getHexResources, getTerrain, getGlobalBiome, generateHexSeed } from './utils/rng';
 import { hexDistance, rotateMoveVector } from './utils/hexMath';
 
 // Easing function for smooth animation (Ease In Out Cubic)
@@ -49,7 +49,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<MapSettings>({
     hexSize: DEFAULT_HEX_SIZE,
     renderRadius: DEFAULT_RENDER_RADIUS,
-    seed: DEFAULT_SEED,
+    seed: generateHexSeed(), // Random seed on load
     terrainWeights: DEFAULT_TERRAIN_WEIGHTS
   });
 

@@ -174,7 +174,7 @@ export const TERRAIN_RESOURCES: Record<TerrainType, BiomeResourceData> = {
       { en: "Jellyfish", pt: "Água-viva", image: img("Jellyfish", "E0FFFF") }
     ],
     mineral_resources: [
-      { en: "Oil", pt: "Petróleo", image: "https://imagedelivery.net/QSzHJ7VhDUrBv1VXnLbazw/048491ea-6fce-4a59-df3f-cf0bba190700/craft512" },
+      { en: "Oil", pt: "Petróleo", image: "https://sa.api.br/nNxe" },
       { en: "Limestone", pt: "Calcário", image: img("Limestone", "DCDCDC") },
       { en: "Manganese Nodules", pt: "Nódulos de Manganês", image: img("Manganese", "696969") }
     ],
